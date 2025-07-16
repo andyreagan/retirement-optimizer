@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Frontend
+node_modules/
+frontend/dist/
+frontend/build/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Static files
+backend/staticfiles/
+backend/static/
+
+# Test coverage
+.coverage
+.pytest_cache/
+coverage/
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# Debug files
+debug_*.py
+test_*.html
+*.png
+cookies.txt
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# Python virtual env
+.venv

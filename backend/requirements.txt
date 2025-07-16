@@ -1,0 +1,9 @@
+django>=5.2.4
+djangorestframework
+django-cors-headers
+django-allauth
+python-dotenv
+stripe
+pandas
+numpy
+openpyxl
