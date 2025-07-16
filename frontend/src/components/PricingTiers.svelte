@@ -258,13 +258,13 @@
           <tr>
             <td>Saved Scenarios</td>
             {#each tiers as tier}
-              <td>{tier.max_scenarios}</td>
+              <td>{tier.max_scenarios === -1 ? 'Unlimited' : tier.max_scenarios}</td>
             {/each}
           </tr>
           <tr>
             <td>Monte Carlo Simulations</td>
             {#each tiers as tier}
-              <td>{tier.max_monte_carlo_runs > 0 ? tier.max_monte_carlo_runs : '❌'}</td>
+              <td>{tier.max_monte_carlo_runs === -1 ? 'Unlimited' : tier.max_monte_carlo_runs > 0 ? tier.max_monte_carlo_runs : '❌'}</td>
             {/each}
           </tr>
           <tr>

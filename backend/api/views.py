@@ -513,19 +513,19 @@ def run_projection(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([permissions.AllowAny])
+@permission_classes([permissions.IsAuthenticated])
 def get_scenarios(request):
-    """Get all saved scenarios"""
-    scenarios = RetirementScenario.objects.all()
+    """Get saved scenarios for the current user"""
+    scenarios = RetirementScenario.objects.filter(user=request.user)
     serializer = RetirementScenarioSerializer(scenarios, many=True)
     return Response(serializer.data)
 
 @api_view(['GET'])
-@permission_classes([permissions.AllowAny])
+@permission_classes([permissions.IsAuthenticated])
 def get_scenario_results(request, scenario_id):
     """Get results for a specific scenario"""
     try:
-        scenario = RetirementScenario.objects.get(id=scenario_id)
+        scenario = RetirementScenario.objects.get(id=scenario_id, user=request.user)
         result = scenario.result
         serializer = ProjectionResultSerializer(result)
         
@@ -676,11 +676,11 @@ def run_monte_carlo(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['DELETE'])
-@permission_classes([permissions.AllowAny])
+@permission_classes([permissions.IsAuthenticated])
 def delete_scenario(request, scenario_id):
     """Delete a saved scenario"""
     try:
-        scenario = RetirementScenario.objects.get(id=scenario_id)
+        scenario = RetirementScenario.objects.get(id=scenario_id, user=request.user)
         scenario.delete()
         return Response({'status': 'success'})
     except RetirementScenario.DoesNotExist:

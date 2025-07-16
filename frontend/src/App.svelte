@@ -197,7 +197,7 @@
         <div class="auth-loading">Loading...</div>
       {:else if authState.isAuthenticated}
         <div class="user-info">
-          <span>Welcome, {authState.user.username}!</span>
+          <span>Welcome, {authState.user.display_name}!</span>
           <div class="profile-dropdown">
             <button class="profile-btn" on:click={() => showProfile = !showProfile}>
               Profile ▼

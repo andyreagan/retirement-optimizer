@@ -169,25 +169,26 @@ STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', 'sk_test_your_stripe_secret_k
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', 'whsec_your_webhook_secret')
 
 # Frontend URL for redirects
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:8000')
 
 # Sites framework (required for allauth)
 SITE_ID = 1
 
-# Authentication backends
+# Authentication backends - Google OAuth + Django admin access
 AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',
-    'allauth.account.auth_backends.AuthenticationBackend',
+    'django.contrib.auth.backends.ModelBackend',  # For Django admin
+    'allauth.account.auth_backends.AuthenticationBackend',  # For Google OAuth
 ]
 
-# Allauth settings (using modern configuration)
-ACCOUNT_LOGIN_METHODS = {'email'}
-ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']  # Only email and password required
+# Allauth settings - Google OAuth only
 ACCOUNT_EMAIL_VERIFICATION = 'none'  # We'll rely on Google's verification
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+ACCOUNT_LOGIN_METHODS = {'email'}
+ACCOUNT_SIGNUP_FIELDS = ['email']  # Only email needed for social auth
 LOGIN_REDIRECT_URL = FRONTEND_URL + '/'
 LOGOUT_REDIRECT_URL = FRONTEND_URL + '/'
 SOCIALACCOUNT_LOGIN_ON_GET = True  # Allow login via GET request
+SOCIALACCOUNT_ONLY = True  # Only allow social authentication
 
 # Social account settings
 SOCIALACCOUNT_PROVIDERS = {

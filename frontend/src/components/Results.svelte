@@ -308,7 +308,7 @@
       
       {#each yearlyData as year, index}
         <div class="year-debug" class:expanded={year.expanded}>
-          <div class="year-header" on:click={() => year.expanded = !year.expanded}>
+          <button class="year-header" on:click={() => year.expanded = !year.expanded} on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); year.expanded = !year.expanded; } }}>
             <h4>
               Year {year.year} (Age {year.age}) - 
               <span class="regime regime-{year.regime}">{year.regime?.toUpperCase() || 'UNKNOWN'}</span>
@@ -323,7 +323,7 @@
               {/if}
             </h4>
             <span class="expand-icon">{year.expanded ? '−' : '+'}</span>
-          </div>
+          </button>
           
           {#if year.expanded}
             <div class="year-details">

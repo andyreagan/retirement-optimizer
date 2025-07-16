@@ -4,18 +4,7 @@
   
   export let showAuth = false
   
-  let loginForm = {
-    email: '',
-    password: ''
-  }
-  
-  let registerForm = {
-    email: '',
-    password: '',
-    confirm_password: ''
-  }
-  
-  let isLogin = true
+  // No longer need login/register forms - only Google OAuth
   let loading = false
   let error = null
   
@@ -52,86 +41,7 @@
     }
   }
   
-  async function login() {
-    loading = true
-    error = null
-    
-    try {
-      // Get CSRF token first
-      const csrfResponse = await fetch('/api/auth/csrf/', {
-        credentials: 'include'
-      })
-      const csrfData = await csrfResponse.json()
-      
-      const response = await fetch('/api/auth/login/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': csrfData.csrf_token
-        },
-        credentials: 'include',
-        body: JSON.stringify(loginForm)
-      })
-      
-      if (response.ok) {
-        await checkAuthStatus()
-        showAuth = false
-        loginForm = { email: '', password: '' }
-      } else {
-        const data = await response.json()
-        error = data.error || 'Login failed'
-      }
-    } catch (err) {
-      error = 'Network error. Please try again.'
-    } finally {
-      loading = false
-    }
-  }
-  
-  async function register() {
-    loading = true
-    error = null
-    
-    if (registerForm.password !== registerForm.confirm_password) {
-      error = 'Passwords do not match'
-      loading = false
-      return
-    }
-    
-    try {
-      // Get CSRF token first
-      const csrfResponse = await fetch('/api/auth/csrf/', {
-        credentials: 'include'
-      })
-      const csrfData = await csrfResponse.json()
-      
-      const response = await fetch('/api/auth/register/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': csrfData.csrf_token
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          email: registerForm.email,
-          password: registerForm.password
-        })
-      })
-      
-      if (response.ok) {
-        await checkAuthStatus()
-        showAuth = false
-        registerForm = { email: '', password: '', confirm_password: '' }
-      } else {
-        const data = await response.json()
-        error = data.error || 'Registration failed'
-      }
-    } catch (err) {
-      error = 'Network error. Please try again.'
-    } finally {
-      loading = false
-    }
-  }
+  // Email/password authentication removed - only Google OAuth supported
   
   async function googleLogin() {
     try {
@@ -171,14 +81,7 @@
     }
   }
   
-  function handleSubmit(e) {
-    e.preventDefault()
-    if (isLogin) {
-      login()
-    } else {
-      register()
-    }
-  }
+  // No form submission needed - only Google OAuth
 </script>
 
 {#if showAuth}
@@ -186,7 +89,7 @@
     <div class="modal-overlay" on:click={() => showAuth = false} on:keydown={() => showAuth = false} role="presentation"></div>
     <div class="modal-content">
       <div class="modal-header">
-        <h2>{isLogin ? 'Sign In' : 'Sign Up'}</h2>
+        <h2>Sign In</h2>
         <button class="close-btn" on:click={() => showAuth = false}>×</button>
       </div>
       
@@ -201,83 +104,13 @@
           </svg>
           Continue with Google
         </button>
-      </div>
-      
-      <div class="divider">
-        <span>or</span>
-      </div>
-      
-      <form on:submit={handleSubmit}>
-        <div class="form-group">
-          <label for="email">Email:</label>
-          {#if isLogin}
-            <input
-              type="email"
-              id="email"
-              bind:value={loginForm.email}
-              required
-              disabled={loading}
-            />
-          {:else}
-            <input
-              type="email"
-              id="email"
-              bind:value={registerForm.email}
-              required
-              disabled={loading}
-            />
-          {/if}
-        </div>
-        
-        <div class="form-group">
-          <label for="password">Password:</label>
-          {#if isLogin}
-            <input
-              type="password"
-              id="password"
-              bind:value={loginForm.password}
-              required
-              disabled={loading}
-            />
-          {:else}
-            <input
-              type="password"
-              id="password"
-              bind:value={registerForm.password}
-              required
-              disabled={loading}
-            />
-          {/if}
-        </div>
-        
-        {#if !isLogin}
-          <div class="form-group">
-            <label for="confirm_password">Confirm Password:</label>
-            <input
-              type="password"
-              id="confirm_password"
-              bind:value={registerForm.confirm_password}
-              required
-              disabled={loading}
-            />
-          </div>
-        {/if}
         
         {#if error}
           <div class="error">{error}</div>
         {/if}
         
-        <button type="submit" class="submit-btn" disabled={loading}>
-          {loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Sign Up')}
-        </button>
-      </form>
-      
-      <div class="auth-switch">
-        <p>
-          {isLogin ? "Don't have an account?" : "Already have an account?"}
-          <button type="button" on:click={() => isLogin = !isLogin}>
-            {isLogin ? 'Sign Up' : 'Sign In'}
-          </button>
+        <p class="auth-info">
+          Sign in with your Google account to access your retirement planning tools.
         </p>
       </div>
     </div>
@@ -374,116 +207,21 @@
     cursor: not-allowed;
   }
   
-  .divider {
-    padding: 20px;
-    text-align: center;
-    position: relative;
-  }
-  
-  .divider::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 20px;
-    right: 20px;
-    height: 1px;
-    background: #dee2e6;
-  }
-  
-  .divider span {
-    background: white;
-    padding: 0 15px;
-    color: #666;
-    font-size: 14px;
-  }
-
-  form {
-    padding: 0 20px 20px 20px;
-  }
-  
-  .form-group {
-    margin-bottom: 20px;
-  }
-  
-  .form-group label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: 500;
-    color: #555;
-  }
-  
-  .form-group input {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    font-size: 14px;
-    box-sizing: border-box;
-  }
-  
-  .form-group input:focus {
-    outline: none;
-    border-color: #007bff;
-  }
-  
-  .form-group input:disabled {
-    background: #f5f5f5;
-    color: #666;
-  }
-  
   .error {
     background: #f8d7da;
     color: #721c24;
     padding: 10px;
     border-radius: 6px;
-    margin-bottom: 20px;
+    margin-top: 20px;
     font-size: 14px;
   }
   
-  .submit-btn {
-    width: 100%;
-    padding: 12px;
-    background: #007bff;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 16px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.3s ease;
-  }
-  
-  .submit-btn:hover:not(:disabled) {
-    background: #0056b3;
-  }
-  
-  .submit-btn:disabled {
-    background: #6c757d;
-    cursor: not-allowed;
-  }
-  
-  .auth-switch {
-    padding: 20px;
+  .auth-info {
     text-align: center;
-    border-top: 1px solid #dee2e6;
-  }
-  
-  .auth-switch p {
-    margin: 0;
     color: #666;
-  }
-  
-  .auth-switch button {
-    background: none;
-    border: none;
-    color: #007bff;
-    cursor: pointer;
-    font-size: inherit;
-    margin-left: 5px;
-  }
-  
-  .auth-switch button:hover {
-    text-decoration: underline;
+    font-size: 14px;
+    margin-top: 20px;
+    margin-bottom: 0;
   }
 </style>
 

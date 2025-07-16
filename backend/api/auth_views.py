@@ -2,12 +2,8 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User
-from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth import logout
 from django.middleware.csrf import get_token
-from django.contrib.auth.decorators import login_required
-from payments.models import UserSubscription, SubscriptionTier
 from allauth.socialaccount.providers.google.provider import GoogleProvider
 from allauth.socialaccount.models import SocialApp
 from django.urls import reverse
@@ -22,87 +18,6 @@ def get_csrf_token(request):
     })
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
-def login_view(request):
-    """Login endpoint"""
-    email = request.data.get('email')
-    password = request.data.get('password')
-    
-    if not email or not password:
-        return Response(
-            {'error': 'Email and password required'}, 
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    # Authenticate using email instead of username
-    user = authenticate(request, username=email, password=password)
-    
-    if user is not None:
-        login(request, user)
-        return Response({
-            'message': 'Login successful',
-            'user': {
-                'id': user.id,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name
-            }
-        })
-    else:
-        return Response(
-            {'error': 'Invalid credentials'}, 
-            status=status.HTTP_401_UNAUTHORIZED
-        )
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def register_view(request):
-    """Registration endpoint"""
-    email = request.data.get('email')
-    password = request.data.get('password')
-    
-    if not email or not password:
-        return Response(
-            {'error': 'Email and password required'}, 
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    # Check if user already exists
-    if User.objects.filter(email=email).exists():
-        return Response(
-            {'error': 'Email already exists'}, 
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    # Create user with email as username
-    user = User.objects.create_user(
-        username=email,
-        email=email,
-        password=password
-    )
-    
-    # Create default free subscription
-    free_tier = SubscriptionTier.objects.get(name='free')
-    UserSubscription.objects.create(
-        user=user,
-        tier=free_tier,
-        status='active'
-    )
-    
-    # Log the user in
-    login(request, user)
-    
-    return Response({
-        'message': 'Registration successful',
-        'user': {
-            'id': user.id,
-            'email': user.email,
-            'first_name': user.first_name,
-            'last_name': user.last_name
-        }
-    })
-
-@api_view(['POST'])
 def logout_view(request):
     """Logout endpoint"""
     logout(request)
@@ -112,11 +27,27 @@ def logout_view(request):
 def user_info(request):
     """Get current user info"""
     if request.user.is_authenticated:
+        # Get display name from first/last name or email
+        display_name = None
+        if request.user.first_name or request.user.last_name:
+            display_name = f"{request.user.first_name} {request.user.last_name}".strip()
+        else:
+            # Try to get name from Google social account
+            social_accounts = request.user.socialaccount_set.all()
+            if social_accounts:
+                extra_data = social_accounts[0].extra_data
+                display_name = extra_data.get('name', '')
+        
+        # Fallback to email if no name available
+        if not display_name:
+            display_name = request.user.email.split('@')[0]
+        
         return Response({
             'id': request.user.id,
             'email': request.user.email,
             'first_name': request.user.first_name,
-            'last_name': request.user.last_name
+            'last_name': request.user.last_name,
+            'display_name': display_name
         })
     else:
         return Response(
