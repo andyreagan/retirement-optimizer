@@ -1,2 +1,19 @@
-pytest
-playwright
+# Backend Testing Dependencies
+pytest>=7.0.0
+pytest-django>=4.5.0
+pytest-cov>=4.0.0
+pytest-xdist>=3.0.0
+pytest-timeout>=2.1.0
+pytest-mock>=3.10.0
+
+# E2E Testing
+playwright>=1.40.0
+pytest-playwright>=0.4.0
+
+# Testing utilities
+factory-boy>=3.2.0
+faker>=20.0.0
+freezegun>=1.2.0
+
+# Coverage reporting
+coverage[toml]>=7.0.0
