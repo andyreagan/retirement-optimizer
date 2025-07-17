@@ -43,33 +43,41 @@ After creating the OAuth client, you'll receive:
 
 ## Django Configuration
 
-### 1. Update Social App in Django Admin
+### 1. Use the Setup Script (Recommended)
+
+Run the Django management command to set up Google OAuth:
+
+```bash
+cd backend
+python manage.py setup_google_oauth --client-id YOUR_CLIENT_ID --client-secret YOUR_CLIENT_SECRET
+```
+
+Or with environment variables:
+
+```bash
+export GOOGLE_OAUTH2_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+export GOOGLE_OAUTH2_CLIENT_SECRET="GOCSPX-your-client-secret"
+python manage.py setup_google_oauth
+```
+
+The script will:
+- Create the Google OAuth SocialApp
+- Associate it with both the default site (example.com) and localhost:8000
+- Provide setup confirmation
+
+### 2. Alternative: Manual Setup via Django Admin
 
 1. Start your Django server: `python manage.py runserver`
 2. Go to `http://localhost:8000/admin/`
 3. Navigate to **Social Applications** > **Social applications**
-4. Edit the Google app created by the setup script
-5. Update:
+4. Create or edit the Google app:
+   - **Provider**: google
+   - **Name**: Google OAuth
    - **Client id**: Your Google Client ID
    - **Secret key**: Your Google Client Secret
-   - **Sites**: Make sure `localhost:8000` is selected
+   - **Sites**: Make sure both `example.com` and `localhost:8000` are selected
 
-### 2. Alternative: Update via Script
-
-Edit `/tmp/setup_google_oauth.py` with your real credentials:
-
-```python
-google_app, created = SocialApp.objects.get_or_create(
-    provider='google',
-    defaults={
-        'name': 'Google OAuth',
-        'client_id': 'your-real-google-client-id.apps.googleusercontent.com',
-        'secret': 'GOCSPX-your-real-google-client-secret',
-    }
-)
-```
-
-Then run: `python /tmp/setup_google_oauth.py`
+**Important**: The app must be associated with the site that matches Django's `SITE_ID` setting (usually site ID 1).
 
 ## Testing the OAuth Flow
 
@@ -147,15 +155,20 @@ Google OAuth provides natural friction for creating multiple accounts:
 
 ### Common Issues
 
-1. **"OAuth app not configured"**
+1. **"SocialApp.DoesNotExist" error**
+   - The Google OAuth app is not associated with the correct site
+   - Run: `python manage.py setup_google_oauth --update` to fix site associations
+   - Or manually add both `example.com` and `localhost:8000` sites in Django admin
+
+2. **"OAuth app not configured"**
    - Make sure Client ID and Secret are set correctly
    - Check that redirect URI matches exactly
 
-2. **"Invalid redirect URI"**
+3. **"Invalid redirect URI"**
    - Verify the redirect URI in Google Cloud Console
    - Ensure no trailing slashes mismatch
 
-3. **"App not verified"**
+4. **"App not verified"**
    - For development, click "Advanced" > "Go to App (unsafe)"
    - For production, submit for Google verification
 
@@ -165,6 +178,7 @@ Google OAuth provides natural friction for creating multiple accounts:
 2. Verify Social App configuration in Django admin
 3. Test the OAuth flow in an incognito window
 4. Check Google Cloud Console quota and usage
+5. Verify site associations: `python manage.py shell -c "from allauth.socialaccount.models import SocialApp; print([(app.provider, [s.domain for s in app.sites.all()]) for app in SocialApp.objects.all()])"`
 
 ## Next Steps
 

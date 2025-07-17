@@ -140,7 +140,7 @@
     if (tier.pricing_type === 'pack') {
       return 'Buy Pack'
     }
-    return 'Upgrade'
+    return 'Go Pro'
   }
   
   function getButtonClass(tier) {
