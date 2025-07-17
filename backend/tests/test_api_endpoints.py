@@ -18,9 +18,9 @@ class UsageLimitAPITests(TestCase):
             password='testpass123'
         )
         
-        self.free_tier = SubscriptionTier.objects.create(
-            name='free',
-            display_name='Free',
+        self.individual_tier = SubscriptionTier.objects.create(
+            name='individual',
+            display_name='Individual',
             pricing_type='free',
             price_monthly=0,
             price_annual=0,
@@ -32,7 +32,7 @@ class UsageLimitAPITests(TestCase):
         
         self.subscription = UserSubscription.objects.create(
             user=self.user,
-            tier=self.free_tier,
+            tier=self.individual_tier,
             status='active'
         )
         
@@ -154,7 +154,7 @@ class UsageLimitAPITests(TestCase):
         self.assertIn(response.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
     
     def test_subscription_creation_for_new_user(self):
-        """Test that new users get a free subscription automatically"""
+        """Test that new users get an individual subscription automatically"""
         new_user = User.objects.create_user(
             username='newuser',
             email='new@example.com',
@@ -169,7 +169,7 @@ class UsageLimitAPITests(TestCase):
         
         # Check that subscription was created
         subscription = UserSubscription.objects.get(user=new_user)
-        self.assertEqual(subscription.tier.name, 'free')
+        self.assertEqual(subscription.tier.name, 'individual')
         self.assertEqual(subscription.projection_runs_used, 1)
     
     def test_usage_limits_in_response(self):

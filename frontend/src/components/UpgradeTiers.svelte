@@ -3,11 +3,15 @@
   
   export let onSelectTier = () => {}
   export let currentTier = 'individual'
-  export let isAuthenticated = true
   
-  let tiers = []
+  let allTiers = []
   let loading = true
   let billingCycle = 'monthly'
+  
+  // Only show upgrade options (exclude the free individual tier)
+  $: upgradeTiers = allTiers.filter(tier => 
+    tier.pricing_type !== 'free'
+  )
   
   onMount(() => {
     loadTiers()
@@ -18,7 +22,7 @@
     try {
       const response = await fetch('/api/payments/tiers/')
       if (response.ok) {
-        tiers = await response.json()
+        allTiers = await response.json()
       }
     } catch (error) {
       console.error('Error loading tiers:', error)
@@ -47,9 +51,6 @@
     if (tier.pricing_type === 'pack') {
       return ' one-time'
     }
-    if (tier.pricing_type === 'free') {
-      return ''
-    }
     return billingCycle === 'annual' ? ' /year' : ' /month'
   }
   
@@ -60,22 +61,12 @@
   function getTierFeatures(tier) {
     const features = []
     
-    // Handle different pricing types
     if (tier.pricing_type === 'pack') {
       features.push(`${tier.max_projection_runs} projection runs`)
       features.push(`${tier.max_scenarios} saved scenarios`)
       features.push(`${tier.max_monte_carlo_runs} Monte Carlo runs`)
       features.push('Single household only')
       features.push('Household locked after first run')
-    } else if (tier.pricing_type === 'free') {
-      features.push(`${tier.max_projection_runs} projection runs`)
-      if (tier.max_scenarios > 0) {
-        features.push(`${tier.max_scenarios} saved scenario`)
-      }
-      features.push('Basic projections only')
-      if (tier.name === 'individual') {
-        features.push('Can purchase additional packs')
-      }
     } else {
       // Monthly/annual subscriptions
       if (tier.max_projection_runs === -1) {
@@ -127,15 +118,12 @@
   }
   
   function isCurrentTier(tier) {
-    return isAuthenticated && tier.name === currentTier
+    return tier.name === currentTier
   }
   
   function getButtonText(tier) {
     if (isCurrentTier(tier)) {
       return 'Current Plan'
-    }
-    if (tier.name === 'individual' && tier.pricing_type === 'free') {
-      return 'Get Started'
     }
     if (tier.pricing_type === 'pack') {
       return 'Buy Pack'
@@ -154,31 +142,34 @@
   }
 </script>
 
-<div class="pricing-tiers">
+<div class="upgrade-tiers">
   <div class="header">
-    <h2>Choose Your Plan</h2>
-    <p>Select the plan that best fits your retirement planning needs</p>
+    <h2>Upgrade Your Plan</h2>
+    <p>Choose from our premium options to unlock more features</p>
   </div>
   
-  
   {#if loading}
-    <div class="loading">Loading pricing tiers...</div>
+    <div class="loading">Loading upgrade options...</div>
   {:else}
     <div class="tiers-grid">
-      {#each tiers as tier}
-        <div class="tier-card" class:current={isCurrentTier(tier)}>
+      {#each upgradeTiers as tier}
+        <div class="tier-card" class:current={isCurrentTier(tier)} class:popular={tier.name === 'individual_pack'}>
+          {#if tier.name === 'individual_pack'}
+            <div class="popular-badge">Most Popular</div>
+          {/if}
+          
           <div class="tier-header">
             <h3>{tier.display_name}</h3>
             <div class="price">
               <span class="amount">{formatPrice(getPrice(tier))}</span>
-              {#if getPricingLabel(tier)}
-                <span class="period">{getPricingLabel(tier)}</span>
-              {/if}
+              <span class="period">{getPricingLabel(tier)}</span>
             </div>
             {#if tier.pricing_type === 'pack'}
               <div class="pack-description">
                 One-time purchase • No monthly fees
               </div>
+            {:else if billingCycle === 'annual'}
+              <div class="savings">Save 2 months!</div>
             {/if}
           </div>
           
@@ -203,79 +194,13 @@
       {/each}
     </div>
   {/if}
-  
-  <div class="features-comparison">
-    <h3>Feature Comparison</h3>
-    <div class="comparison-table">
-      <table>
-        <thead>
-          <tr>
-            <th>Feature</th>
-            {#each tiers as tier}
-              <th>{tier.display_name}</th>
-            {/each}
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Basic Projections</td>
-            {#each tiers as tier}
-              <td class="checkmark">✓</td>
-            {/each}
-          </tr>
-          <tr>
-            <td>Saved Scenarios</td>
-            {#each tiers as tier}
-              <td>{tier.max_scenarios === -1 ? 'Unlimited' : tier.max_scenarios}</td>
-            {/each}
-          </tr>
-          <tr>
-            <td>Monte Carlo Simulations</td>
-            {#each tiers as tier}
-              <td>{tier.max_monte_carlo_runs === -1 ? 'Unlimited' : tier.max_monte_carlo_runs > 0 ? tier.max_monte_carlo_runs : '❌'}</td>
-            {/each}
-          </tr>
-          <tr>
-            <td>Advanced Strategies</td>
-            {#each tiers as tier}
-              <td>{tier.advanced_strategies ? '✓' : '❌'}</td>
-            {/each}
-          </tr>
-          <tr>
-            <td>Multi-Person Projections</td>
-            {#each tiers as tier}
-              <td>{tier.multi_person_projections ? '✓' : '❌'}</td>
-            {/each}
-          </tr>
-          <tr>
-            <td>Excel Export</td>
-            {#each tiers as tier}
-              <td>{tier.excel_export ? '✓' : '❌'}</td>
-            {/each}
-          </tr>
-          <tr>
-            <td>Priority Support</td>
-            {#each tiers as tier}
-              <td>{tier.priority_support ? '✓' : '❌'}</td>
-            {/each}
-          </tr>
-          <tr>
-            <td>API Access</td>
-            {#each tiers as tier}
-              <td>{tier.api_access ? '✓' : '❌'}</td>
-            {/each}
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
 </div>
 
 <style>
-  .pricing-tiers {
-    max-width: 1200px;
+  .upgrade-tiers {
+    max-width: 800px;
     margin: 0 auto;
-    padding: 40px 20px;
+    padding: 20px;
   }
   
   .header {
@@ -284,63 +209,21 @@
   }
   
   .header h2 {
-    font-size: 2.5rem;
+    font-size: 2rem;
     color: #333;
     margin-bottom: 10px;
   }
   
   .header p {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     color: #666;
     margin: 0;
-  }
-  
-  .billing-toggle {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 40px;
-  }
-  
-  .toggle-group {
-    display: flex;
-    background: #f8f9fa;
-    border-radius: 8px;
-    padding: 4px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  }
-  
-  .toggle-btn {
-    padding: 12px 24px;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    border-radius: 6px;
-    font-size: 16px;
-    font-weight: 500;
-    position: relative;
-    transition: all 0.3s ease;
-  }
-  
-  .toggle-btn.active {
-    background: #007bff;
-    color: white;
-  }
-  
-  .savings-badge {
-    background: #28a745;
-    color: white;
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 10px;
-    margin-left: 8px;
-    font-weight: bold;
   }
   
   .tiers-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 30px;
-    margin-bottom: 60px;
   }
   
   .tier-card {
@@ -489,55 +372,6 @@
     cursor: not-allowed;
   }
   
-  .features-comparison {
-    background: #f8f9fa;
-    border-radius: 12px;
-    padding: 40px;
-  }
-  
-  .features-comparison h3 {
-    text-align: center;
-    font-size: 1.8rem;
-    color: #333;
-    margin-bottom: 30px;
-  }
-  
-  .comparison-table {
-    overflow-x: auto;
-  }
-  
-  .comparison-table table {
-    width: 100%;
-    border-collapse: collapse;
-    background: white;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  }
-  
-  .comparison-table th,
-  .comparison-table td {
-    padding: 15px;
-    text-align: center;
-    border-bottom: 1px solid #dee2e6;
-  }
-  
-  .comparison-table th {
-    background: #f8f9fa;
-    font-weight: 600;
-    color: #333;
-  }
-  
-  .comparison-table td:first-child {
-    text-align: left;
-    font-weight: 500;
-  }
-  
-  .checkmark {
-    color: #28a745;
-    font-weight: bold;
-  }
-  
   .loading {
     text-align: center;
     padding: 40px;
@@ -554,11 +388,7 @@
     }
     
     .header h2 {
-      font-size: 2rem;
-    }
-    
-    .toggle-group {
-      flex-direction: column;
+      font-size: 1.5rem;
     }
     
     .amount {

@@ -7,11 +7,11 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write('Setting up new pricing tiers...')
         
-        # Create Free tier
-        free_tier, created = SubscriptionTier.objects.get_or_create(
-            name='free',
+        # Create Individual tier (renamed from Free)
+        individual_tier, created = SubscriptionTier.objects.get_or_create(
+            name='individual',
             defaults={
-                'display_name': 'Free',
+                'display_name': 'Individual',
                 'pricing_type': 'free',
                 'price_monthly': 0,
                 'price_annual': 0,
@@ -30,9 +30,9 @@ class Command(BaseCommand):
             }
         )
         if created:
-            self.stdout.write(f'✓ Created {free_tier.display_name} tier')
+            self.stdout.write(f'✓ Created {individual_tier.display_name} tier')
         else:
-            self.stdout.write(f'• Updated {free_tier.display_name} tier')
+            self.stdout.write(f'• Updated {individual_tier.display_name} tier')
         
         # Create Individual Pack tier
         individual_pack, created = SubscriptionTier.objects.get_or_create(
@@ -61,11 +61,11 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f'• Updated {individual_pack.display_name} tier')
         
-        # Create Professional Monthly tier
-        professional_monthly, created = SubscriptionTier.objects.get_or_create(
-            name='professional_monthly',
+        # Create Professional tier (renamed from Professional Monthly)
+        professional, created = SubscriptionTier.objects.get_or_create(
+            name='professional',
             defaults={
-                'display_name': 'Professional Monthly',
+                'display_name': 'Professional',
                 'pricing_type': 'monthly',
                 'price_monthly': 200.00,
                 'price_annual': 2000.00,  # 200 * 10 (2 months free)
@@ -84,12 +84,12 @@ class Command(BaseCommand):
             }
         )
         if created:
-            self.stdout.write(f'✓ Created {professional_monthly.display_name} tier')
+            self.stdout.write(f'✓ Created {professional.display_name} tier')
         else:
-            self.stdout.write(f'• Updated {professional_monthly.display_name} tier')
+            self.stdout.write(f'• Updated {professional.display_name} tier')
         
         # Update legacy tiers to inactive
-        legacy_tiers = ['basic', 'premium', 'enterprise']
+        legacy_tiers = ['basic', 'premium', 'enterprise', 'free', 'professional_monthly']
         for tier_name in legacy_tiers:
             try:
                 tier = SubscriptionTier.objects.get(name=tier_name)
@@ -103,6 +103,6 @@ class Command(BaseCommand):
             self.style.SUCCESS('\nNew pricing tiers setup complete!')
         )
         self.stdout.write('\nPricing structure:')
-        self.stdout.write('• Free: 3 projections, 1 scenario')
+        self.stdout.write('• Individual: 3 projections, 1 scenario (can purchase packs)')
         self.stdout.write('• Individual Pack: $20 for 25 projections, 5 scenarios, 10 monte carlo runs')
-        self.stdout.write('• Professional Monthly: $200/month for unlimited everything')
+        self.stdout.write('• Professional: $200/month for unlimited everything')

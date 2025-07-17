@@ -18,11 +18,12 @@ class UsageLimitAPITests(TestCase):
             password='testpass123'
         )
         
-        self.free_tier = SubscriptionTier.objects.create(
-            name='free',
-            display_name='Free',
+        self.individual_tier = SubscriptionTier.objects.create(
+            name='individual',
+            display_name='Individual',
             price_monthly=0,
             price_annual=0,
+            max_projection_runs=10,  # Allow 10 projection runs
             max_scenarios=3,
             max_monte_carlo_runs=1,
             max_simulations_per_run=0
@@ -30,7 +31,7 @@ class UsageLimitAPITests(TestCase):
         
         self.subscription = UserSubscription.objects.create(
             user=self.user,
-            tier=self.free_tier,
+            tier=self.individual_tier,
             status='active'
         )
         
@@ -41,8 +42,8 @@ class UsageLimitAPITests(TestCase):
             'death_age': 100,
             'filing_status': 'single',
             'growth_rate': 0.03,
-            'annual_income': [50000] * 75,
-            'annual_expenses': [40000] * 75,
+            'annual_income': [50000] * 76,  # 76 values for ages 25-100 inclusive
+            'annual_expenses': [40000] * 76,
             'accounts': [
                 {
                     'account_type': '401k',
@@ -81,30 +82,33 @@ class UsageLimitAPITests(TestCase):
         
         # Check that usage was tracked
         self.subscription.refresh_from_db()
+        self.assertEqual(self.subscription.projection_runs_used, 1)
         self.assertEqual(self.subscription.scenarios_used, 1)
         
-        # Check that usage event was created
-        usage_events = UsageEvent.objects.filter(user=self.user, event_type='scenario_saved')
-        self.assertEqual(usage_events.count(), 1)
+        # Check that usage events were created
+        projection_events = UsageEvent.objects.filter(user=self.user, event_type='projection_run')
+        self.assertEqual(projection_events.count(), 1)
+        scenario_events = UsageEvent.objects.filter(user=self.user, event_type='scenario_saved')
+        self.assertEqual(scenario_events.count(), 1)
     
     def test_projection_at_limit(self):
         """Test running projections until hitting the limit"""
         self.client.force_authenticate(user=self.user)
         
-        # Run 3 projections (the limit for free tier)
+        # Run 3 projections (the scenario save limit for free tier)
         for i in range(3):
             response = self.client.post('/api/projection/', self.projection_data, format='json')
             self.assertEqual(response.status_code, status.HTTP_200_OK)
         
-        # Fourth projection should be rejected
+        # Fourth projection should still work (projection runs limit is 10) but not save scenario
         response = self.client.post('/api/projection/', self.projection_data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
-        self.assertIn('error', response.data)
-        self.assertIn('monthly scenario limit', response.data['error'])
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn('scenario_id', response.data)  # Should not save scenario
         
         # Check final usage count
         self.subscription.refresh_from_db()
         self.assertEqual(self.subscription.scenarios_used, 3)
+        self.assertEqual(self.subscription.projection_runs_used, 4)
     
     def test_monte_carlo_within_limits(self):
         """Test running Monte Carlo within usage limits"""
@@ -145,13 +149,13 @@ class UsageLimitAPITests(TestCase):
     def test_unauthenticated_access(self):
         """Test that unauthenticated users cannot access endpoints"""
         response = self.client.post('/api/projection/', self.projection_data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         
         response = self.client.post('/api/monte-carlo/', self.monte_carlo_data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
     
     def test_subscription_creation_for_new_user(self):
-        """Test that new users get a free subscription automatically"""
+        """Test that new users get an individual subscription automatically"""
         new_user = User.objects.create_user(
             username='newuser',
             email='new@example.com',
@@ -166,7 +170,7 @@ class UsageLimitAPITests(TestCase):
         
         # Check that subscription was created
         subscription = UserSubscription.objects.get(user=new_user)
-        self.assertEqual(subscription.tier.name, 'free')
+        self.assertEqual(subscription.tier.name, 'individual')
         self.assertEqual(subscription.scenarios_used, 1)
     
     def test_usage_limits_in_response(self):
@@ -199,11 +203,12 @@ class UsageResetTests(TestCase):
             password='testpass123'
         )
         
-        self.free_tier = SubscriptionTier.objects.create(
-            name='free',
-            display_name='Free',
+        self.individual_tier = SubscriptionTier.objects.create(
+            name='individual',
+            display_name='Individual',
             price_monthly=0,
             price_annual=0,
+            max_projection_runs=10,  # Allow 10 projection runs
             max_scenarios=3,
             max_monte_carlo_runs=1,
             max_simulations_per_run=0
@@ -211,7 +216,7 @@ class UsageResetTests(TestCase):
         
         self.subscription = UserSubscription.objects.create(
             user=self.user,
-            tier=self.free_tier,
+            tier=self.individual_tier,
             status='active',
             scenarios_used=3,
             monte_carlo_runs_used=1

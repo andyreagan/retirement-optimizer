@@ -1,4 +1,6 @@
 <script>
+  import PricingTiers from './PricingTiers.svelte'
+  
   export let onShowAuth
 
   const features = [
@@ -20,31 +22,10 @@
     }
   ]
 
-  const subscriptionTiers = [
-    {
-      name: "Free",
-      price: "$0",
-      features: [
-        "Basic FIRE projections",
-        "Simple Monte Carlo (100 runs)",
-        "1 saved scenario",
-        "Essential withdrawal strategies"
-      ]
-    },
-    {
-      name: "Premium",
-      price: "$9.99/month",
-      features: [
-        "Unlimited FIRE projections",
-        "Full Monte Carlo (10,000 runs)",
-        "Unlimited saved scenarios",
-        "Excel export",
-        "Advanced Roth ladders",
-        "Sequence of returns analysis",
-        "Geographic arbitrage planning"
-      ]
-    }
-  ]
+  function handleSelectTier(tier, billingCycle) {
+    // For landing page, selecting a tier should trigger authentication
+    onShowAuth()
+  }
 </script>
 
 <div class="landing-page">
@@ -92,25 +73,11 @@
     </div>
   </div>
 
-  <div class="pricing-section">
-    <h2>Choose Your Plan</h2>
-    <div class="pricing-grid">
-      {#each subscriptionTiers as tier}
-        <div class="pricing-card" class:featured={tier.name === 'Premium'}>
-          <h3>{tier.name}</h3>
-          <div class="price">{tier.price}</div>
-          <ul class="features-list">
-            {#each tier.features as feature}
-              <li>{feature}</li>
-            {/each}
-          </ul>
-          <button class="tier-button" on:click={() => onShowAuth()}>
-            {tier.name === 'Free' ? 'Start Free' : 'Upgrade Now'}
-          </button>
-        </div>
-      {/each}
-    </div>
-  </div>
+  <PricingTiers 
+    onSelectTier={handleSelectTier}
+    currentTier="individual"
+    isAuthenticated={false}
+  />
 
   <div class="cta-section">
     <h2>Ready to Achieve Financial Independence?</h2>
@@ -277,87 +244,7 @@
     line-height: 1.6;
   }
 
-  .pricing-section {
-    padding: 80px 0;
-    text-align: center;
-    background: #f8f9fa;
-    margin: 0 -20px;
-    padding-left: 20px;
-    padding-right: 20px;
-  }
 
-  .pricing-section h2 {
-    font-size: 2.5rem;
-    margin-bottom: 60px;
-    color: #2c3e50;
-  }
-
-  .pricing-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 40px;
-    max-width: 800px;
-    margin: 0 auto;
-  }
-
-  .pricing-card {
-    background: white;
-    padding: 40px 30px;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    transition: transform 0.3s ease;
-  }
-
-  .pricing-card.featured {
-    border: 3px solid #007bff;
-    transform: scale(1.05);
-  }
-
-  .pricing-card h3 {
-    font-size: 1.5rem;
-    margin-bottom: 20px;
-    color: #2c3e50;
-  }
-
-  .price {
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: #007bff;
-    margin-bottom: 30px;
-  }
-
-  .features-list {
-    list-style: none;
-    padding: 0;
-    margin: 0 0 30px 0;
-  }
-
-  .features-list li {
-    padding: 10px 0;
-    color: #666;
-    border-bottom: 1px solid #eee;
-  }
-
-  .features-list li:last-child {
-    border-bottom: none;
-  }
-
-  .tier-button {
-    width: 100%;
-    padding: 15px;
-    background: #007bff;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 1.1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-  }
-
-  .tier-button:hover {
-    background: #0056b3;
-  }
 
   .cta-section {
     padding: 80px 0;
@@ -399,13 +286,11 @@
     }
 
     .features-section,
-    .pricing-section,
     .cta-section {
       padding: 60px 0;
     }
 
     .features-section h2,
-    .pricing-section h2,
     .cta-section h2 {
       font-size: 2rem;
     }

@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import PricingTiers from './PricingTiers.svelte'
+  import UpgradeTiers from './UpgradeTiers.svelte'
   
   let userSubscription = null
   let loading = true
@@ -28,7 +28,7 @@
   }
   
   async function handleSelectTier(tier, billingCycle) {
-    if (tier.name === 'free') {
+    if (tier.name === 'individual') {
       await cancelSubscription()
       return
     }
@@ -151,28 +151,17 @@
           <h3>Current Plan</h3>
           <div class="plan-details">
             <div class="plan-name">
-              {#if userSubscription.has_pack_credits}
-                Individual Planning Pack
-              {:else if userSubscription.tier?.name === 'free'}
-                Individual (Free)
-              {:else}
-                {userSubscription.tier?.display_name || 'Individual (Free)'}
-              {/if}
+              {userSubscription.tier?.display_name}
             </div>
             <div class="plan-price">
-              {#if userSubscription.has_pack_credits}
-                {userSubscription.pack_purchases} pack{userSubscription.pack_purchases !== 1 ? 's' : ''} purchased
-              {:else if userSubscription.tier?.name === 'free'}
-                No packs purchased
-              {:else if userSubscription.tier?.pricing_type === 'pack'}
-                ${userSubscription.tier?.pack_price || 0} one-time
+              {#if userSubscription.tier?.name === 'individual'}
+                {#if userSubscription.has_pack_credits}
+                  {userSubscription.pack_purchases} pack{userSubscription.pack_purchases !== 1 ? 's' : ''} purchased
+                {:else}
+                  Free plan
+                {/if}
               {:else}
                 ${userSubscription.tier?.price_monthly || 0}/month
-              {/if}
-            </div>
-            <div class="billing-cycle">
-              {#if userSubscription.billing_cycle && userSubscription.tier?.pricing_type !== 'pack' && userSubscription.tier?.pricing_type !== 'free'}
-                Billed {userSubscription.billing_cycle}
               {/if}
             </div>
           </div>
@@ -308,10 +297,10 @@
       
       <div class="actions">
         <button class="btn btn-primary" on:click={() => showPricing = true}>
-          Change Plan
+          {userSubscription.tier?.name === 'individual' ? 'Get More Usage' : 'Change Plan'}
         </button>
         
-        {#if userSubscription.tier?.name !== 'free'}
+        {#if userSubscription.tier?.name !== 'individual'}
           <button class="btn btn-secondary" on:click={openBillingPortal}>
             Manage Billing
           </button>
@@ -322,12 +311,14 @@
         {/if}
       </div>
       
-      {#if userSubscription.tier?.name !== 'free' && (((userSubscription.usage_limits?.projection_runs?.limit || 0) - (userSubscription.projection_runs_used || 0)) <= 1 || ((userSubscription.usage_limits?.scenarios?.limit || 0) - (userSubscription.scenarios_used || 0)) <= 1 || ((userSubscription.usage_limits?.monte_carlo?.limit || 0) - (userSubscription.monte_carlo_runs_used || 0)) <= 1)}
+      {#if (((userSubscription.usage_limits?.projection_runs?.limit || 0) - (userSubscription.projection_runs_used || 0)) <= 1 || ((userSubscription.usage_limits?.scenarios?.limit || 0) - (userSubscription.scenarios_used || 0)) <= 1 || ((userSubscription.usage_limits?.monte_carlo?.limit || 0) - (userSubscription.monte_carlo_runs_used || 0)) <= 1)}
         <div class="usage-warning">
           <h4>⚠️ Usage Limit Warning</h4>
           <p>
             {#if userSubscription.tier?.pricing_type === 'pack' || userSubscription.has_pack_credits}
               You're running low on credits. Consider purchasing more planning packs to continue.
+            {:else if userSubscription.tier?.name === 'individual'}
+              You're approaching your usage limits. Consider purchasing more usage or going pro for unlimited access.
             {:else}
               You're approaching your usage limits. Consider upgrading to a higher tier.
             {/if}
@@ -353,9 +344,9 @@
           <h2>Choose Your Plan</h2>
           <button class="close-btn" on:click={() => showPricing = false}>×</button>
         </div>
-        <PricingTiers 
+        <UpgradeTiers 
           onSelectTier={handleSelectTier}
-          currentTier={userSubscription?.tier?.name || 'free'}
+          currentTier={userSubscription?.tier?.name || 'individual'}
         />
       </div>
     </div>

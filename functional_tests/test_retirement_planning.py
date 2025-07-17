@@ -104,12 +104,12 @@ class TestRetirementPlanningFlow:
         expect(page.locator('text=Success Probability')).to_be_visible()
     
     @pytest.mark.e2e
-    def test_usage_limits_free_tier(self, authenticated_page):
-        """Test that free tier usage limits are enforced"""
+    def test_usage_limits_individual_tier(self, authenticated_page):
+        """Test that individual tier usage limits are enforced"""
         page = authenticated_page
         
         # Run projections up to the limit
-        for i in range(3):  # Free tier limit
+        for i in range(3):  # Individual tier limit
             page.fill('input[name="start_age"]', str(30 + i))
             page.click('button:has-text("Run Projection")')
             page.wait_for_selector('.results-section')

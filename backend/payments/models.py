@@ -6,9 +6,11 @@ import json
 class SubscriptionTier(models.Model):
     """Define subscription tiers and their features"""
     TIER_CHOICES = [
-        ('free', 'Free'),
+        ('individual', 'Individual'),
         ('individual_pack', 'Individual Pack'),
-        ('professional_monthly', 'Professional Monthly'),
+        ('professional', 'Professional'),
+        ('free', 'Free'),  # Legacy
+        ('professional_monthly', 'Professional Monthly'),  # Legacy
         ('basic', 'Basic'),  # Legacy
         ('premium', 'Premium'),  # Legacy
         ('enterprise', 'Enterprise')  # Legacy

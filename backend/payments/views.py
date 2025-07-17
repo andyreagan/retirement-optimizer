@@ -36,11 +36,11 @@ def get_user_subscription(request):
         serializer = UserSubscriptionSerializer(subscription)
         return Response(serializer.data)
     except UserSubscription.DoesNotExist:
-        # Create default free subscription
-        free_tier = SubscriptionTier.objects.get(name='free')
+        # Create default individual subscription
+        individual_tier = SubscriptionTier.objects.get(name='individual')
         subscription = UserSubscription.objects.create(
             user=request.user,
-            tier=free_tier,
+            tier=individual_tier,
             status='active'
         )
         serializer = UserSubscriptionSerializer(subscription)

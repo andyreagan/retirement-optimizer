@@ -12,9 +12,9 @@ class SubscriptionModelTests(TestCase):
             password='testpass123'
         )
         
-        self.free_tier = SubscriptionTier.objects.create(
-            name='free',
-            display_name='Free',
+        self.individual_tier = SubscriptionTier.objects.create(
+            name='individual',
+            display_name='Individual',
             price_monthly=0,
             price_annual=0,
             max_scenarios=3,
@@ -38,7 +38,7 @@ class SubscriptionModelTests(TestCase):
         """Test creating a user subscription"""
         subscription = UserSubscription.objects.create(
             user=self.user,
-            tier=self.free_tier,
+            tier=self.individual_tier,
             status='active'
         )
         
@@ -50,7 +50,7 @@ class SubscriptionModelTests(TestCase):
         """Test usage limits calculation"""
         subscription = UserSubscription.objects.create(
             user=self.user,
-            tier=self.free_tier,
+            tier=self.individual_tier,
             status='active',
             scenarios_used=2,
             monte_carlo_runs_used=0
@@ -70,7 +70,7 @@ class SubscriptionModelTests(TestCase):
         """Test usage limits when at maximum"""
         subscription = UserSubscription.objects.create(
             user=self.user,
-            tier=self.free_tier,
+            tier=self.individual_tier,
             status='active',
             scenarios_used=3,
             monte_carlo_runs_used=1
@@ -85,7 +85,7 @@ class SubscriptionModelTests(TestCase):
         """Test usage limits when over maximum (edge case)"""
         subscription = UserSubscription.objects.create(
             user=self.user,
-            tier=self.free_tier,
+            tier=self.individual_tier,
             status='active',
             scenarios_used=5,  # Over limit
             monte_carlo_runs_used=2  # Over limit
@@ -100,7 +100,7 @@ class SubscriptionModelTests(TestCase):
         """Test feature access based on tier"""
         subscription = UserSubscription.objects.create(
             user=self.user,
-            tier=self.free_tier,
+            tier=self.individual_tier,
             status='active'
         )
         
@@ -118,7 +118,7 @@ class SubscriptionModelTests(TestCase):
         """Test resetting monthly usage counters"""
         subscription = UserSubscription.objects.create(
             user=self.user,
-            tier=self.free_tier,
+            tier=self.individual_tier,
             status='active',
             scenarios_used=3,
             monte_carlo_runs_used=1

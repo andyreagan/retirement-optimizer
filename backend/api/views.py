@@ -337,12 +337,12 @@ def run_projection(request):
             }, status=status.HTTP_429_TOO_MANY_REQUESTS)
             
     except UserSubscription.DoesNotExist:
-        # Create default free subscription for new users
+        # Create default individual subscription for new users
         from payments.models import SubscriptionTier
-        free_tier = SubscriptionTier.objects.get(name='free')
+        individual_tier = SubscriptionTier.objects.get(name='individual')
         subscription = UserSubscription.objects.create(
             user=request.user,
-            tier=free_tier,
+            tier=individual_tier,
             status='active'
         )
     
@@ -569,12 +569,12 @@ def run_monte_carlo(request):
             }, status=status.HTTP_429_TOO_MANY_REQUESTS)
             
     except UserSubscription.DoesNotExist:
-        # Create default free subscription for new users
+        # Create default individual subscription for new users
         from payments.models import SubscriptionTier
-        free_tier = SubscriptionTier.objects.get(name='free')
+        individual_tier = SubscriptionTier.objects.get(name='individual')
         subscription = UserSubscription.objects.create(
             user=request.user,
-            tier=free_tier,
+            tier=individual_tier,
             status='active'
         )
     

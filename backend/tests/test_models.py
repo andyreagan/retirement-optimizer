@@ -71,8 +71,8 @@ class TestUserSubscription:
     @pytest.fixture
     def tier(self):
         return SubscriptionTier.objects.create(
-            name='free',
-            display_name='Free',
+            name='individual',
+            display_name='Individual',
             price_monthly=0,
             price_annual=0,
             max_scenarios=3,
