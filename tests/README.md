@@ -1,40 +1,21 @@
-# Test Organization
+# Test Suite
 
-This directory contains organized test files for the retirement optimization project.
+Simple test organization:
 
-## Directory Structure
+### Backend Tests (`tests/backend/`)
+Python/Django tests
 
-- **functional/** - End-to-end functional tests
-- **unit/** - Unit tests for individual components
-- **integration/** - Integration tests for system interactions
+### Frontend Tests (`frontend/tests/`)
+JavaScript/Svelte tests  
+
+### Functional Tests (`tests/functional/`)
+End-to-end tests
 
 ## Running Tests
 
-### Backend Tests
 ```bash
-cd backend
-python -m pytest ../tests/
+make test              # Run all tests
+make test-backend      # Run backend tests
+make test-frontend     # Run frontend tests
+make test-functional   # Run functional tests
 ```
-
-### Frontend Tests
-```bash
-cd frontend
-npm test
-```
-
-## Test Categories
-
-### Functional Tests
-- Complete user workflows
-- Multi-component interactions
-- Business logic validation
-
-### Unit Tests
-- Individual function/class testing
-- API endpoint testing
-- Algorithm validation
-
-### Integration Tests
-- Database interactions
-- External service integrations
-- Usage tracking systems
