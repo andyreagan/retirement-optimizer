@@ -182,13 +182,11 @@ AUTHENTICATION_BACKENDS = [
 
 # Allauth settings - Google OAuth only
 ACCOUNT_EMAIL_VERIFICATION = 'none'  # We'll rely on Google's verification
-ACCOUNT_USER_MODEL_USERNAME_FIELD = None
-ACCOUNT_LOGIN_METHODS = {'email'}
-ACCOUNT_SIGNUP_FIELDS = ['email']  # Only email needed for social auth
 LOGIN_REDIRECT_URL = FRONTEND_URL + '/'
 LOGOUT_REDIRECT_URL = FRONTEND_URL + '/'
 SOCIALACCOUNT_LOGIN_ON_GET = True  # Allow login via GET request
-SOCIALACCOUNT_ONLY = True  # Only allow social authentication
+# We'll still technically allow the username/password
+# for the admin interface
 
 # Social account settings
 SOCIALACCOUNT_PROVIDERS = {
