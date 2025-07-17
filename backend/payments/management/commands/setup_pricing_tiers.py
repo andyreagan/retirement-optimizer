@@ -18,7 +18,7 @@ class Command(BaseCommand):
                 'pack_price': 0,
                 'max_projection_runs': 3,
                 'max_scenarios': 1,
-                'max_monte_carlo_runs': 0,
+                'max_monte_carlo_runs': 1,
                 'max_simulations_per_run': 1000,
                 'advanced_strategies': False,
                 'multi_person_projections': False,
@@ -103,6 +103,6 @@ class Command(BaseCommand):
             self.style.SUCCESS('\nNew pricing tiers setup complete!')
         )
         self.stdout.write('\nPricing structure:')
-        self.stdout.write('• Individual: 3 projections, 1 scenario (can purchase packs)')
+        self.stdout.write('• Individual: 3 projections, 1 scenario, 1 monte carlo run (can purchase packs)')
         self.stdout.write('• Individual Pack: $20 for 25 projections, 5 scenarios, 10 monte carlo runs')
         self.stdout.write('• Professional: $200/month for unlimited everything')

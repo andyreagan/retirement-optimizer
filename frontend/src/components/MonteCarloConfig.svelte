@@ -1,5 +1,5 @@
 <script>
-  import { scenarioUtils } from '../stores/scenarioStore.js'
+  import { scenarioUtils, scenarioActions } from '../stores/scenarioStore.js'
   
   export let config = {
     num_simulations: 1000,
@@ -46,7 +46,7 @@
         <button 
           type="button" 
           class="upgrade-btn" 
-          on:click={() => window.location.href = '/subscription'}
+          on:click={() => scenarioActions.setCurrentView('subscription')}
         >
           Upgrade Plan
         </button>
