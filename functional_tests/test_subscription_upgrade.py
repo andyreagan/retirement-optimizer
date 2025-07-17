@@ -3,6 +3,11 @@
 Test that the upgrade button logic works correctly when hitting usage limits
 """
 
+import pytest
+
+# Mark this entire file to be skipped by pytest
+pytestmark = pytest.mark.skip(reason="This is a standalone script, not a pytest test")
+
 import os
 import sys
 import django

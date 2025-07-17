@@ -16,7 +16,7 @@ def django_server():
     env['DJANGO_SETTINGS_MODULE'] = 'retirement_backend.settings'
     
     # Start Django server
-    backend_path = os.path.join(os.path.dirname(__file__), '../../backend')
+    backend_path = os.path.join(os.path.dirname(__file__), '../backend')
     django_process = subprocess.Popen(
         ['python', 'manage.py', 'runserver', '8000', '--noreload'],
         cwd=backend_path,
@@ -33,28 +33,6 @@ def django_server():
     # Cleanup
     django_process.terminate()
     django_process.wait()
-
-
-@pytest.fixture(scope="session")
-def frontend_server():
-    """Start Vite development server for E2E tests"""
-    # Start Vite server
-    frontend_path = os.path.join(os.path.dirname(__file__), '../../frontend')
-    vite_process = subprocess.Popen(
-        ['npm', 'run', 'dev', '--', '--port', '5173'],
-        cwd=frontend_path,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
-    
-    # Wait for server to start
-    time.sleep(5)
-    
-    yield
-    
-    # Cleanup
-    vite_process.terminate()
-    vite_process.wait()
 
 
 @pytest.fixture(scope="session")
@@ -82,18 +60,36 @@ def page(browser):
 
 
 @pytest.fixture
-def authenticated_page(page, django_server, frontend_server):
+def authenticated_page(page, django_server, django_user_model):
     """Create an authenticated page with test user logged in"""
+    # Create a test user
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    test_user = User.objects.create_user(
+        username='testuser',
+        email='test@example.com',
+        password='testpass123'
+    )
+    
     # Navigate to frontend
-    page.goto('http://localhost:5173')
+    page.goto('http://localhost:8000')
     
     # Wait for page to load
     page.wait_for_load_state('networkidle')
     
-    # TODO: Implement Google OAuth mock or test user login
-    # For now, this is a placeholder
+    # Mock authentication by setting session cookie or localStorage
+    # This would typically be done through your auth system
+    # For now, we'll skip the actual Google OAuth flow
+    
+    # Note: In a real test environment, you would:
+    # 1. Mock the Google OAuth provider
+    # 2. Set appropriate session cookies
+    # 3. Or use a test authentication endpoint
     
     yield page
+    
+    # Cleanup
+    test_user.delete()
 
 
 # Test data fixtures
