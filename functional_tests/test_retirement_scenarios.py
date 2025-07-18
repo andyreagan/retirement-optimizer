@@ -76,7 +76,7 @@ def django_server():
     with ctxmgr() as c:
         yield f"http://localhost:3000"
 
-@pytest.mark.skip(reason="Need to update test for new UI")
+@pytest.mark.skip(reason="Need to rewrite for new UI and auth flow")
 def test_retirement_app_full_workflow(django_server):
     """Test the full workflow of the retirement app"""
     

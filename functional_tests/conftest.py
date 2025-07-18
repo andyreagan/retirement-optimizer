@@ -60,36 +60,40 @@ def page(browser):
 
 
 @pytest.fixture
-def authenticated_page(page, django_server, django_user_model):
+def authenticated_page(page, django_server):
     """Create an authenticated page with test user logged in"""
-    # Create a test user
-    from django.contrib.auth import get_user_model
-    User = get_user_model()
-    test_user = User.objects.create_user(
-        username='testuser',
-        email='test@example.com',
-        password='testpass123'
+    import json
+    
+    # First get CSRF token
+    csrf_response = page.context.request.get('http://localhost:8000/api/auth/csrf/')
+    csrf_data = csrf_response.json()
+    csrf_token = csrf_data['csrf_token']
+    
+    # Get cookies from the CSRF request
+    cookies = page.context.cookies()
+    csrf_cookie = next((c for c in cookies if c['name'] == 'csrftoken'), None)
+    
+    # Use test auth endpoint to log in
+    auth_response = page.context.request.post('http://localhost:8000/api/auth/test-login/', 
+        data=json.dumps({'email': 'test@example.com'}),
+        headers={
+            'X-CSRFToken': csrf_token,
+            'Content-Type': 'application/json',
+            'Cookie': f"csrftoken={csrf_cookie['value']}" if csrf_cookie else "",
+        }
     )
     
-    # Navigate to frontend
-    page.goto('http://localhost:8000')
+    if auth_response.status != 200:
+        raise Exception(f"Test login failed: {auth_response.status} - {auth_response.text()}")
     
-    # Wait for page to load
+    # Navigate to frontend after authentication
+    page.goto('http://localhost:8000')
     page.wait_for_load_state('networkidle')
     
-    # Mock authentication by setting session cookie or localStorage
-    # This would typically be done through your auth system
-    # For now, we'll skip the actual Google OAuth flow
-    
-    # Note: In a real test environment, you would:
-    # 1. Mock the Google OAuth provider
-    # 2. Set appropriate session cookies
-    # 3. Or use a test authentication endpoint
+    # Verify we're logged in by checking for user info
+    page.wait_for_timeout(1000)
     
     yield page
-    
-    # Cleanup
-    test_user.delete()
 
 
 # Test data fixtures

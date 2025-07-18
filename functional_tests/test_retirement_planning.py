@@ -6,7 +6,7 @@ from playwright.sync_api import expect
 import json
 
 
-@pytest.mark.skip(reason="Need to implement proper auth mocking for authenticated tests")
+@pytest.mark.skip(reason="UI elements need to be updated for current interface")
 class TestRetirementPlanningFlow:
     """Test complete retirement planning workflows"""
     
