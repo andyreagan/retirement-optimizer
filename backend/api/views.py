@@ -448,15 +448,18 @@ def run_projection(request):
         # Save scenarios only when explicitly requested
         should_save = request.data.get('save', False)  # Default to False, only save when requested
         scenario_id = None
+        deduct_credit = False  # Flag to track if we should deduct scenario credit
         
-        # Check if user can save scenario (without deducting credit yet)
+        # Check if user can save scenario
         usage_limits = subscription.get_usage_limits()
-        can_save_scenario = should_save and usage_limits['scenarios']['remaining'] > 0
+        # Allow saving if: explicitly requested AND (has credits OR updating existing scenario)
+        can_save_scenario = should_save
         
         if can_save_scenario:
-            # Create scenario
+            # Create or update scenario
+            scenario_name = data.get('name', f"Projection {subscription.scenarios_used + 1}")
             scenario_data = {
-                'name': data.get('name', f"Projection {subscription.scenarios_used + 1}"),
+                'name': scenario_name,
                 'start_age': data.get('start_age'),
                 'death_age': data.get('death_age'),
                 'filing_status': data.get('filing_status', 'single'),
@@ -464,8 +467,30 @@ def run_projection(request):
                 'annual_expenses': data.get('annual_expenses', []),
                 'accounts': data['accounts']
             }
-            scenario_serializer = RetirementScenarioSerializer(data=scenario_data)
-            if scenario_serializer.is_valid():
+            
+            # Check if scenario with this name already exists for this user
+            from .models import RetirementScenario
+            existing_scenario = None
+            try:
+                existing_scenario = RetirementScenario.objects.get(user=request.user, name=scenario_name)
+            except RetirementScenario.DoesNotExist:
+                pass
+            
+            if existing_scenario:
+                # Update existing scenario
+                scenario_serializer = RetirementScenarioSerializer(existing_scenario, data=scenario_data)
+                deduct_credit = False  # Don't deduct credit for updating existing scenario
+            else:
+                # Create new scenario - check if user has credits
+                if usage_limits['scenarios']['remaining'] <= 0:
+                    # User can't save new scenarios, skip saving but continue with projection
+                    can_save_scenario = False
+                else:
+                    scenario_serializer = RetirementScenarioSerializer(data=scenario_data)
+                    deduct_credit = True  # Deduct credit for new scenario
+            
+            # Only proceed with saving if we still can save the scenario            
+            if can_save_scenario and scenario_serializer.is_valid():
                 scenario = scenario_serializer.save(user=request.user)
                 
                 # Store the complete request data for reloading with schema version
@@ -508,8 +533,8 @@ def run_projection(request):
                     'status': 'error'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-            # Deduct scenario credit if scenario was saved
-            if scenario_id and not subscription.use_scenario_credit():
+            # Deduct scenario credit if scenario was saved and it's a new scenario
+            if scenario_id and deduct_credit and not subscription.use_scenario_credit():
                 # This shouldn't happen either, but handle gracefully
                 return Response({
                     'error': 'Scenario credit deduction failed - please try again',
