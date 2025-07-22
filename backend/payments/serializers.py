@@ -7,7 +7,7 @@ class SubscriptionTierSerializer(serializers.ModelSerializer):
     class Meta:
         model = SubscriptionTier
         fields = [
-            'id', 'name', 'display_name', 'pricing_type', 'price_monthly', 'price_annual',
+            'id', 'name', 'display_name', 'pricing_type', 'price_monthly',
             'pack_price', 'max_projection_runs', 'max_scenarios', 'max_monte_carlo_runs', 
             'max_simulations_per_run', 'advanced_strategies', 'multi_person_projections', 
             'excel_export', 'priority_support', 'api_access', 'household_locked',

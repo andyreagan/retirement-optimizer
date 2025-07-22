@@ -316,6 +316,8 @@ def run_multi_person_projection(projection, data):
 @permission_classes([permissions.IsAuthenticated])
 def run_projection(request):
     """Run a retirement projection"""
+    from django.db import transaction
+    
     serializer = ProjectionRequestSerializer(data=request.data)
     
     if not serializer.is_valid():
@@ -323,28 +325,30 @@ def run_projection(request):
     
     data = serializer.validated_data
     
-    # Check usage limits for authenticated users
+    # Check if user can run projection without deducting credit yet
+    from payments.models import UserSubscription, SubscriptionTier
+    
     try:
-        from payments.models import UserSubscription
         subscription = UserSubscription.objects.get(user=request.user)
-        usage_limits = subscription.get_usage_limits()
-        
-        # Check if user has reached projection run limit
-        if usage_limits['projection_runs']['remaining'] <= 0:
-            return Response({
-                'error': 'You have reached your monthly projection run limit. Please upgrade your plan or wait until next month.',
-                'usage_limits': usage_limits
-            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
-            
     except UserSubscription.DoesNotExist:
         # Create default individual subscription for new users
-        from payments.models import SubscriptionTier
         individual_tier = SubscriptionTier.objects.get(name='individual')
         subscription = UserSubscription.objects.create(
             user=request.user,
             tier=individual_tier,
-            status='active'
+            status='active',
+            projection_credits=3,
+            scenario_credits=1,
+            monte_carlo_credits=1
         )
+    
+    # Check if user has credits/limit available (without deducting yet)
+    usage_limits = subscription.get_usage_limits()
+    if usage_limits['projection_runs']['remaining'] <= 0:
+        return Response({
+            'error': 'You have reached your projection run limit. Please upgrade your plan or purchase credits.',
+            'usage_limits': usage_limits
+        }, status=status.HTTP_429_TOO_MANY_REQUESTS)
     
     try:
         # Create strategies based on user selection
@@ -439,16 +443,17 @@ def run_projection(request):
             }
         )
         
-        # Increment projection run counter
-        subscription.projection_runs_used += 1
-        subscription.save()
+        # Credit was already deducted in the transaction above
         
-        # Auto-save scenarios to count toward usage limits
-        should_save = request.data.get('save', True)  # Default to True for auto-saving
+        # Save scenarios only when explicitly requested
+        should_save = request.data.get('save', False)  # Default to False, only save when requested
         scenario_id = None
         
-        # Check if user has scenario save capacity before saving
-        if should_save and subscription.scenarios_used < subscription.tier.max_scenarios:
+        # Check if user can save scenario (without deducting credit yet)
+        usage_limits = subscription.get_usage_limits()
+        can_save_scenario = should_save and usage_limits['scenarios']['remaining'] > 0
+        
+        if can_save_scenario:
             # Create scenario
             scenario_data = {
                 'name': data.get('name', f"Projection {subscription.scenarios_used + 1}"),
@@ -483,15 +488,33 @@ def run_projection(request):
                     metadata={
                         'scenario_id': scenario.id,
                         'scenario_name': scenario.name,
-                        'auto_saved': not request.data.get('save', False)
+                        'explicitly_saved': request.data.get('save', False)
                     }
                 )
                 
-                # Increment scenario counter
-                subscription.scenarios_used += 1
-                subscription.save()
+                # Scenario will be saved, credit will be deducted after successful projection
                 
                 scenario_id = scenario.id
+        
+        # Projection completed successfully - now deduct credits atomically
+        with transaction.atomic():
+            subscription = UserSubscription.objects.select_for_update().get(user=request.user)
+            
+            # Deduct projection credit
+            if not subscription.use_projection_credit():
+                # This shouldn't happen since we checked earlier, but handle gracefully
+                return Response({
+                    'error': 'Credit deduction failed - please try again',
+                    'status': 'error'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # Deduct scenario credit if scenario was saved
+            if scenario_id and not subscription.use_scenario_credit():
+                # This shouldn't happen either, but handle gracefully
+                return Response({
+                    'error': 'Scenario credit deduction failed - please try again',
+                    'status': 'error'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Build response
         response_data = {
@@ -548,6 +571,7 @@ def get_scenario_results(request, scenario_id):
 @permission_classes([permissions.IsAuthenticated])
 def run_monte_carlo(request):
     """Run Monte Carlo simulation on retirement projection"""
+    from django.db import transaction
     
     # Validate basic request data
     if not request.data:
@@ -555,28 +579,30 @@ def run_monte_carlo(request):
     
     data = request.data
     
-    # Check usage limits for authenticated users
+    # Check if user can run Monte Carlo without deducting credit yet
+    from payments.models import UserSubscription, SubscriptionTier
+    
     try:
-        from payments.models import UserSubscription
         subscription = UserSubscription.objects.get(user=request.user)
-        usage_limits = subscription.get_usage_limits()
-        
-        # Check if user has reached Monte Carlo limit
-        if usage_limits['monte_carlo']['remaining'] <= 0:
-            return Response({
-                'error': 'You have reached your monthly Monte Carlo simulation limit. Please upgrade your plan or wait until next month.',
-                'usage_limits': usage_limits
-            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
-            
     except UserSubscription.DoesNotExist:
         # Create default individual subscription for new users
-        from payments.models import SubscriptionTier
         individual_tier = SubscriptionTier.objects.get(name='individual')
         subscription = UserSubscription.objects.create(
             user=request.user,
             tier=individual_tier,
-            status='active'
+            status='active',
+            projection_credits=3,
+            scenario_credits=1,
+            monte_carlo_credits=1
         )
+    
+    # Check if user has credits/limit available (without deducting yet)
+    usage_limits = subscription.get_usage_limits()
+    if usage_limits['monte_carlo']['remaining'] <= 0:
+        return Response({
+            'error': 'You have reached your Monte Carlo simulation limit. Please upgrade your plan or purchase credits.',
+            'usage_limits': usage_limits
+        }, status=status.HTTP_429_TOO_MANY_REQUESTS)
     
     try:
         # Extract Monte Carlo configuration
@@ -642,9 +668,15 @@ def run_monte_carlo(request):
             }
         )
         
-        # Increment usage counter
-        subscription.monte_carlo_runs_used += 1
-        subscription.save()
+        # Monte Carlo completed successfully - now deduct credit atomically
+        with transaction.atomic():
+            subscription = UserSubscription.objects.select_for_update().get(user=request.user)
+            if not subscription.use_monte_carlo_credit():
+                # This shouldn't happen since we checked earlier, but handle gracefully
+                return Response({
+                    'error': 'Credit deduction failed - please try again',
+                    'status': 'error'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Convert results to JSON-serializable format
         response_data = {

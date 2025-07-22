@@ -31,12 +31,18 @@
     loading = true;
     hasLoadedScenarios = true;
     try {
+      console.log('Loading saved scenarios...');
       const response = await fetch('/api/scenarios/', {
         credentials: 'include'
       });
+      console.log('Scenarios API response status:', response.status);
       if (response.ok) {
         const scenarios = await response.json();
+        console.log('Loaded scenarios:', scenarios);
         scenarioActions.setSavedScenarios(scenarios);
+      } else {
+        const errorText = await response.text();
+        console.error('Failed to load scenarios. Status:', response.status, 'Response:', errorText);
       }
     } catch (error) {
       console.error('Error loading scenarios:', error);

@@ -22,10 +22,42 @@ logger = logging.getLogger(__name__)
 
 @api_view(['GET'])
 def get_subscription_tiers(request):
-    """Get all available subscription tiers"""
-    tiers = SubscriptionTier.objects.filter(is_active=True).order_by('price_monthly')
-    serializer = SubscriptionTierSerializer(tiers, many=True)
-    return Response(serializer.data)
+    """Get all available subscription tiers with virtual individual pack option"""
+    # Get actual tiers
+    actual_tiers = SubscriptionTier.objects.filter(is_active=True).order_by('price_monthly')
+    
+    # Serialize them
+    tiers_data = []
+    for tier in actual_tiers:
+        tier_data = SubscriptionTierSerializer(tier).data
+        tiers_data.append(tier_data)
+        
+        # After individual tier, add the virtual "Individual Pack" option
+        if tier.name == 'individual':
+            pack_option = {
+                'id': 'individual_pack_virtual',
+                'name': 'individual_pack',
+                'display_name': 'Individual Pack',
+                'pricing_type': 'pack',
+                'price_monthly': 0,
+                'price_annual': 0,
+                'pack_price': 20.00,
+                'max_projection_runs': 25,
+                'max_scenarios': 5, 
+                'max_monte_carlo_runs': 10,
+                'max_simulations_per_run': 5000,
+                'advanced_strategies': True,
+                'multi_person_projections': False,
+                'excel_export': True,
+                'priority_support': False,
+                'api_access': False,
+                'household_locked': False,
+                'features': {},
+                'is_active': True
+            }
+            tiers_data.append(pack_option)
+    
+    return Response(tiers_data)
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
@@ -41,7 +73,10 @@ def get_user_subscription(request):
         subscription = UserSubscription.objects.create(
             user=request.user,
             tier=individual_tier,
-            status='active'
+            status='active',
+            projection_credits=3,
+            scenario_credits=1,
+            monte_carlo_credits=1
         )
         serializer = UserSubscriptionSerializer(subscription)
         return Response(serializer.data)
@@ -49,18 +84,32 @@ def get_user_subscription(request):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def create_checkout_session(request):
-    """Create Stripe checkout session for subscription"""
+    """Create Stripe checkout session for subscription or pack purchase"""
     try:
         tier_id = request.data.get('tier_id')
+        tier_name = request.data.get('tier_name')
         billing_cycle = request.data.get('billing_cycle', 'monthly')
         
-        if not tier_id:
+        if not tier_id and not tier_name:
             return Response(
-                {'error': 'tier_id is required'}, 
+                {'error': 'tier_id or tier_name is required'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        tier = SubscriptionTier.objects.get(id=tier_id)
+        # Handle virtual "individual_pack" selection
+        if tier_name == 'individual_pack' or tier_id == 'individual_pack_virtual':
+            # This is a pack purchase, not a tier change
+            # For now, return an error - we'll need to set up Stripe for one-time payments
+            return Response(
+                {'error': 'Pack purchases not yet implemented in Stripe'}, 
+                status=status.HTTP_501_NOT_IMPLEMENTED
+            )
+        
+        # Handle actual tier subscriptions
+        if tier_id:
+            tier = SubscriptionTier.objects.get(id=tier_id)
+        else:
+            tier = SubscriptionTier.objects.get(name=tier_name)
         
         # Get appropriate price ID
         if billing_cycle == 'annual':
@@ -168,24 +217,17 @@ def track_usage(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Create usage event
+        # Create usage event (for analytics/logging only - no credit deduction here)
         UsageEvent.objects.create(
             user=request.user,
             event_type=event_type,
             metadata=metadata
         )
         
-        # Update subscription usage counters
-        subscription = UserSubscription.objects.get(user=request.user)
+        # NOTE: Usage counter updates should only happen in the main API views
+        # where proper credit deduction methods are used with atomic transactions
         
-        if event_type == 'scenario_saved':
-            subscription.scenarios_used += 1
-        elif event_type == 'monte_carlo_run':
-            subscription.monte_carlo_runs_used += 1
-        
-        subscription.save()
-        
-        return Response({'message': 'Usage tracked successfully'})
+        return Response({'message': 'Usage event logged successfully'})
         
     except UserSubscription.DoesNotExist:
         return Response(
