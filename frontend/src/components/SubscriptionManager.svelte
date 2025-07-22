@@ -12,7 +12,7 @@
     checkForIntendedPurchase()
   })
 
-  function checkForIntendedPurchase() {
+  async function checkForIntendedPurchase() {
     // Check if user came here with an intended purchase
     const intendedPurchase = localStorage.getItem('intentedPurchase')
     if (intendedPurchase) {
@@ -23,14 +23,46 @@
         // Clear the intended purchase to prevent showing again
         localStorage.removeItem('intentedPurchase')
         
-        // Show pricing modal automatically
-        showPricing = true
+        // Automatically trigger purchase flow for the specific tier
+        await triggerAutomaticPurchase(purchase)
         
-        // Could potentially pre-select the tier here if needed
       } catch (error) {
         console.error('Error parsing intended purchase:', error)
         localStorage.removeItem('intentedPurchase')
       }
+    }
+  }
+
+  async function triggerAutomaticPurchase(purchase) {
+    // Wait for tiers to load if they haven't yet
+    if (loading) {
+      // Wait a bit for loadUserSubscription to complete
+      await new Promise(resolve => setTimeout(resolve, 1000))
+    }
+
+    try {
+      // Fetch the tiers to find the one the user intended to purchase
+      const response = await fetch('/api/payments/tiers/')
+      if (!response.ok) {
+        throw new Error('Failed to load tiers')
+      }
+      
+      const tiers = await response.json()
+      const targetTier = tiers.find(tier => tier.name === purchase.tierName)
+      
+      if (targetTier) {
+        console.log('Auto-triggering purchase for:', targetTier.display_name)
+        // Automatically trigger the purchase
+        await handleSelectTier(targetTier, purchase.billingCycle)
+      } else {
+        console.error('Target tier not found:', purchase.tierName)
+        // Fall back to showing pricing modal
+        showPricing = true
+      }
+    } catch (error) {
+      console.error('Error triggering automatic purchase:', error)
+      // Fall back to showing pricing modal
+      showPricing = true
     }
   }
   
