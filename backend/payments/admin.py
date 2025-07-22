@@ -218,9 +218,9 @@ class PackPurchaseAdmin(admin.ModelAdmin):
     def credits_granted_summary(self, obj):
         return format_html(
             'P: {} | S: {} | MC: {}',
-            obj.projection_credits_granted or 0,
-            obj.scenario_credits_granted or 0,
-            obj.monte_carlo_credits_granted or 0
+            obj.projection_credits or 0,
+            obj.scenario_credits or 0,
+            obj.monte_carlo_credits or 0
         )
     credits_granted_summary.short_description = 'Credits Granted'
 

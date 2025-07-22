@@ -466,7 +466,7 @@ def run_projection(request):
             }
             scenario_serializer = RetirementScenarioSerializer(data=scenario_data)
             if scenario_serializer.is_valid():
-                scenario = scenario_serializer.save()
+                scenario = scenario_serializer.save(user=request.user)
                 
                 # Store the complete request data for reloading with schema version
                 versioned_request_data = dict(request.data)
