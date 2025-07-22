@@ -9,7 +9,30 @@
   
   onMount(() => {
     loadUserSubscription()
+    checkForIntendedPurchase()
   })
+
+  function checkForIntendedPurchase() {
+    // Check if user came here with an intended purchase
+    const intendedPurchase = localStorage.getItem('intentedPurchase')
+    if (intendedPurchase) {
+      try {
+        const purchase = JSON.parse(intendedPurchase)
+        console.log('Found intended purchase:', purchase)
+        
+        // Clear the intended purchase to prevent showing again
+        localStorage.removeItem('intentedPurchase')
+        
+        // Show pricing modal automatically
+        showPricing = true
+        
+        // Could potentially pre-select the tier here if needed
+      } catch (error) {
+        console.error('Error parsing intended purchase:', error)
+        localStorage.removeItem('intentedPurchase')
+      }
+    }
+  }
   
   async function loadUserSubscription() {
     loading = true
@@ -35,24 +58,47 @@
     
     processingPayment = true
     try {
+      // Determine payload based on tier type
+      let payload
+      if (tier.pricing_type === 'pack' || tier.name === 'individual_pack') {
+        // Pack purchase - use tier_name
+        payload = {
+          tier_name: tier.name,
+          billing_cycle: billingCycle
+        }
+      } else {
+        // Regular subscription - use tier_id
+        payload = {
+          tier_id: tier.id,
+          billing_cycle: billingCycle
+        }
+      }
+      
       const response = await fetch('/api/payments/checkout/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          tier_id: tier.id,
-          billing_cycle: billingCycle
-        })
+        body: JSON.stringify(payload)
       })
       
+      const data = await response.json()
+      
       if (response.ok) {
-        const data = await response.json()
         // Redirect to Stripe Checkout
         window.location.href = data.checkout_url
+      } else {
+        // Handle pack purchase not implemented error
+        if (response.status === 501 && data.error?.includes('Pack purchases not yet implemented')) {
+          alert('Pack purchases are being set up. Please check back soon or contact support.')
+        } else {
+          console.error('Checkout error:', data.error)
+          alert('Error creating checkout session: ' + (data.error || 'Unknown error'))
+        }
       }
     } catch (error) {
       console.error('Error creating checkout session:', error)
+      alert('Network error creating checkout session. Please try again.')
     } finally {
       processingPayment = false
     }
@@ -179,37 +225,25 @@
           </h3>
           <div class="usage-details">
             {#if userSubscription.tier?.pricing_type === 'pack' || userSubscription.has_pack_credits}
-              <!-- Pack credits display -->
+              <!-- Pack credits display - show total remaining (tier + credits) -->
               <div class="usage-item">
                 <div class="usage-label">Projection Runs</div>
-                <div class="usage-bar">
-                  <div class="usage-fill usage-{getCreditsColor(userSubscription.projection_credits || 0)}" 
-                       style="width: 100%"></div>
-                </div>
                 <div class="usage-text">
-                  {userSubscription.projection_credits || 0} remaining
+                  {userSubscription.usage_limits?.projection_runs?.remaining || 0} remaining
                 </div>
               </div>
               
               <div class="usage-item">
                 <div class="usage-label">Saved Scenarios</div>
-                <div class="usage-bar">
-                  <div class="usage-fill usage-{getCreditsColor(userSubscription.scenario_credits || 0)}" 
-                       style="width: 100%"></div>
-                </div>
                 <div class="usage-text">
-                  {userSubscription.scenario_credits || 0} remaining
+                  {userSubscription.usage_limits?.scenarios?.remaining || 0} remaining
                 </div>
               </div>
               
               <div class="usage-item">
                 <div class="usage-label">Monte Carlo Runs</div>
-                <div class="usage-bar">
-                  <div class="usage-fill usage-{getCreditsColor(userSubscription.monte_carlo_credits || 0)}" 
-                       style="width: 100%"></div>
-                </div>
                 <div class="usage-text">
-                  {userSubscription.monte_carlo_credits || 0} remaining
+                  {userSubscription.usage_limits?.monte_carlo?.remaining || 0} remaining
                 </div>
               </div>
             {:else if userSubscription.tier?.max_projection_runs === -1}

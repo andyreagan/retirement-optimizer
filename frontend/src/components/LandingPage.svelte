@@ -24,6 +24,22 @@
 
   function handleSelectTier(tier, billingCycle) {
     // For landing page, selecting a tier should trigger authentication
+    // Store the selected tier info for post-auth purchase
+    if (tier.pricing_type === 'pack') {
+      // Store pack purchase intent in localStorage for after authentication
+      localStorage.setItem('pendingPurchase', JSON.stringify({
+        tierName: tier.name,
+        tierType: 'pack',
+        billingCycle
+      }))
+    } else {
+      // Store subscription upgrade intent
+      localStorage.setItem('pendingPurchase', JSON.stringify({
+        tierName: tier.name,
+        tierType: 'subscription',
+        billingCycle
+      }))
+    }
     onShowAuth()
   }
 </script>

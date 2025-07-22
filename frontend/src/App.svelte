@@ -37,8 +37,30 @@
     authState = state
     if (state.isAuthenticated) {
       loadUserSubscription()
+      handlePendingPurchase()
     }
   })
+
+  function handlePendingPurchase() {
+    // Check if there's a pending purchase from the landing page
+    const pendingPurchase = localStorage.getItem('pendingPurchase')
+    if (pendingPurchase) {
+      try {
+        const purchase = JSON.parse(pendingPurchase)
+        // Clear the pending purchase
+        localStorage.removeItem('pendingPurchase')
+        
+        // Navigate to subscription manager to complete the purchase
+        scenarioActions.setCurrentView('subscription')
+        
+        // Store the intended purchase for the SubscriptionManager to pick up
+        localStorage.setItem('intentedPurchase', pendingPurchase)
+      } catch (error) {
+        console.error('Error parsing pending purchase:', error)
+        localStorage.removeItem('pendingPurchase')
+      }
+    }
+  }
   
   scenarioStore.subscribe(state => {
     scenario = state.current
@@ -207,8 +229,8 @@
                 <div class="profile-section">
                   <h4>Subscription Plan</h4>
                   {#if userSubscription}
-                    <p><strong>Plan:</strong> {userSubscription.tier_name || 'Free'}</p>
-                    <p><strong>Status:</strong> {userSubscription.status || 'Active'}</p>
+                    <p><strong>Plan:</strong> {userSubscription.tier?.display_name || 'Individual'}</p>
+                    <p><strong>Status:</strong> {userSubscription.status ? userSubscription.status.charAt(0).toUpperCase() + userSubscription.status.slice(1) : 'Active'}</p>
                     {#if userSubscription.monthly_projections_limit}
                       <p><strong>Monthly Projections:</strong> {userSubscription.monthly_projections_used || 0} / {userSubscription.monthly_projections_limit}</p>
                     {/if}
