@@ -67,7 +67,8 @@ const initialState = {
     currentView: 'parameters', // 'parameters' | 'results' | 'monte-carlo'
     isLoading: false,
     error: null,
-    showScenarioManager: false
+    showScenarioManager: false,
+    shouldRefreshScenarios: false
   }
 };
 
@@ -101,6 +102,20 @@ export const scenarioActions = {
     scenarioStore.update(state => ({
       ...state,
       ui: { ...state.ui, showScenarioManager: !state.ui.showScenarioManager }
+    }));
+  },
+
+  triggerScenarioRefresh: () => {
+    scenarioStore.update(state => ({
+      ...state,
+      ui: { ...state.ui, shouldRefreshScenarios: true }
+    }));
+  },
+
+  clearRefreshFlag: () => {
+    scenarioStore.update(state => ({
+      ...state,
+      ui: { ...state.ui, shouldRefreshScenarios: false }
     }));
   },
 
@@ -273,37 +288,16 @@ export const scenarioUtils = {
   hasUnsavedChanges: (current) => current.isDirty,
   getScenarioName: (current) => current.parameters.name || 'Untitled Scenario',
   canRunMonteCarlo: (current, userSubscription) => {
-    // Check if user has Monte Carlo access
-    if (!userSubscription || !userSubscription.usage_limits?.monte_carlo?.limit) {
-      return false;
-    }
-    
-    // Check if user has exceeded their limit
-    const used = userSubscription.monte_carlo_runs_used || 0;
-    const limit = userSubscription.usage_limits.monte_carlo.limit;
-    return used < limit;
+    // Check if user has Monte Carlo credits
+    return userSubscription?.usage_limits?.monte_carlo?.remaining > 0;
   },
   canRunProjection: (userSubscription) => {
-    // Check if user has projection run access
-    if (!userSubscription || !userSubscription.usage_limits?.projection_runs?.limit) {
-      return false;
-    }
-    
-    // Check if user has exceeded their projection run limit
-    const used = userSubscription.projection_runs_used || 0;
-    const limit = userSubscription.usage_limits.projection_runs.limit;
-    return used < limit;
+    // Check if user has projection credits
+    return userSubscription?.usage_limits?.projection_runs?.remaining > 0;
   },
   canSaveScenario: (userSubscription) => {
-    // Check if user has scenario save access
-    if (!userSubscription || !userSubscription.usage_limits?.scenarios?.limit) {
-      return false;
-    }
-    
-    // Check if user has exceeded their scenario save limit
-    const used = userSubscription.scenarios_used || 0;
-    const limit = userSubscription.usage_limits.scenarios.limit;
-    return used < limit;
+    // Check if user has scenario credits
+    return userSubscription?.usage_limits?.scenarios?.remaining > 0;
   },
   getUsageLimitMessage: (userSubscription, type) => {
     if (!userSubscription || !userSubscription.usage_limits) {
@@ -316,9 +310,9 @@ export const scenarioUtils = {
     }
     
     if (limits.remaining <= 0) {
-      return `You've reached your ${type} limit (${limits.used}/${limits.limit}). Upgrade your plan or wait until next month.`;
+      return `You have no ${type} credits remaining. Purchase credits or upgrade your plan.`;
     }
     
-    return `${limits.remaining} ${type} remaining this month (${limits.used}/${limits.limit} used)`;
+    return `${limits.remaining} ${type} credits remaining`;
   }
 };

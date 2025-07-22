@@ -4,19 +4,32 @@
   let ui;
   let saved;
   let loading = false;
+  let hasLoadedScenarios = false;
 
   scenarioStore.subscribe(state => {
     ui = state.ui;
     saved = state.saved;
   });
 
-  // Load scenarios when the manager opens
-  $: if (ui.showScenarioManager && saved.length === 0) {
+  // Load scenarios when the manager opens (or reset the flag when closed)
+  $: if (ui.showScenarioManager && !loading && !hasLoadedScenarios) {
     loadSavedScenarios();
+  } else if (!ui.showScenarioManager) {
+    // Reset flag when manager closes so it refreshes on next open
+    hasLoadedScenarios = false;
+  }
+
+  // Respond to refresh trigger
+  $: if (ui.shouldRefreshScenarios && !loading) {
+    loadSavedScenarios();
+    scenarioActions.clearRefreshFlag();
   }
 
   async function loadSavedScenarios() {
+    if (loading) return; // Prevent concurrent requests
+    
     loading = true;
+    hasLoadedScenarios = true;
     try {
       const response = await fetch('/api/scenarios/', {
         credentials: 'include'

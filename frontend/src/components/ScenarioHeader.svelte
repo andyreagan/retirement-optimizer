@@ -46,6 +46,7 @@
       if (response.ok) {
         const result = await response.json();
         scenarioActions.markClean();
+        scenarioActions.triggerScenarioRefresh();
         dispatch('scenarioSaved', result);
         // Refresh saved scenarios list
         dispatch('refreshSavedScenarios');

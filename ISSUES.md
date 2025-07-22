@@ -4,6 +4,11 @@
     - Modified SubscriptionManager.svelte to handle pack purchases and show pricing modal automatically
     - Users now see proper checkout flow when clicking "Buy Pack" from homepage
     - I'm guessing the pro plan is similar
-- When I click "save scenario", I don't see the option to load that scenario.
-    - I don't see it even if I reload the page - did it actually save?
+- ✅ FIXED: When I click "save scenario", I don't see the option to load that scenario.
+    - Fixed by adding automatic refresh trigger when scenarios are saved
+    - Modified scenarioStore.js to add shouldRefreshScenarios flag and associated actions
+    - Modified ScenarioManager.svelte to respond to refresh trigger and reload scenarios automatically
+    - Modified ScenarioHeader.svelte to trigger refresh after successful save
+    - ScenarioManager now resets its loaded flag when closed, ensuring fresh data on next open
+    - Users can now see their saved scenarios immediately after saving without manual refresh
 
