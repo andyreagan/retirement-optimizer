@@ -131,17 +131,3 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_retirement_db
           CI: true
-      
-      - name: Upload E2E test artifacts
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-screenshots
-          path: tests/e2e/screenshots/
-      
-      - name: Upload E2E test videos
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-videos
-          path: tests/e2e/videos/
