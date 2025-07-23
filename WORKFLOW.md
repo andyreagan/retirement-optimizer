@@ -9,3 +9,4 @@ You can see how to run them in the Makefile.
 If this functionality is not tested, add a test!
 
 Create a branch and make a commit describing the changes.
+Make a pull request against main on the branch in github.
