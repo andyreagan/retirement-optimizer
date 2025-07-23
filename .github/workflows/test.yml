@@ -46,7 +46,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       
       - name: Cache Python dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
@@ -133,14 +133,14 @@ jobs:
           CI: true
       
       - name: Upload E2E test artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-screenshots
           path: tests/e2e/screenshots/
       
       - name: Upload E2E test videos
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-videos
