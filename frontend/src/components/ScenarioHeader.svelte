@@ -46,11 +46,14 @@
       if (response.ok) {
         const result = await response.json();
         scenarioActions.markClean();
+        scenarioActions.triggerScenarioRefresh();
         dispatch('scenarioSaved', result);
         // Refresh saved scenarios list
         dispatch('refreshSavedScenarios');
       } else {
-        throw new Error(`Failed to save scenario: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Save failed. Status:', response.status, 'Response:', errorText);
+        throw new Error(`Failed to save scenario: ${response.status} - ${errorText}`);
       }
     } catch (error) {
       scenarioActions.setError(error.message);
@@ -106,9 +109,9 @@
     <button 
       class="action-btn primary" 
       on:click={saveScenario}
-      disabled={ui.isLoading || !scenarioUtils.hasUnsavedChanges(scenario)}
+      disabled={ui.isLoading || !scenario.parameters.name?.trim()}
     >
-      {ui.isLoading ? 'Saving...' : 'Save Scenario'}
+{ui.isLoading ? 'Running & Saving...' : 'Run & Save Scenario'}
     </button>
   </div>
 </div>

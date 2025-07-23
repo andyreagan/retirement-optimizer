@@ -12,9 +12,8 @@ class Command(BaseCommand):
             name='individual',
             defaults={
                 'display_name': 'Individual',
-                'pricing_type': 'free',
+                'pricing_type': 'monthly',
                 'price_monthly': 0,
-                'price_annual': 0,
                 'pack_price': 0,
                 'max_projection_runs': 3,
                 'max_scenarios': 1,
@@ -34,45 +33,18 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f'• Updated {individual_tier.display_name} tier')
         
-        # Create Individual Pack tier
-        individual_pack, created = SubscriptionTier.objects.get_or_create(
-            name='individual_pack',
-            defaults={
-                'display_name': 'Individual Planning Pack',
-                'pricing_type': 'pack',
-                'price_monthly': 0,
-                'price_annual': 0,
-                'pack_price': 20.00,
-                'max_projection_runs': 25,  # Credits per pack
-                'max_scenarios': 5,  # Credits per pack
-                'max_monte_carlo_runs': 10,  # Credits per pack
-                'max_simulations_per_run': 5000,
-                'advanced_strategies': True,
-                'multi_person_projections': False,  # Limited to one household
-                'excel_export': True,
-                'priority_support': False,
-                'api_access': False,
-                'household_locked': True,  # Household locked after first projection
-                'is_active': True
-            }
-        )
-        if created:
-            self.stdout.write(f'✓ Created {individual_pack.display_name} tier')
-        else:
-            self.stdout.write(f'• Updated {individual_pack.display_name} tier')
         
-        # Create Professional tier (renamed from Professional Monthly)
+        # Create Professional tier with high credit allocation
         professional, created = SubscriptionTier.objects.get_or_create(
             name='professional',
             defaults={
                 'display_name': 'Professional',
                 'pricing_type': 'monthly',
                 'price_monthly': 200.00,
-                'price_annual': 2000.00,  # 200 * 10 (2 months free)
                 'pack_price': 0,
-                'max_projection_runs': -1,  # Unlimited
-                'max_scenarios': -1,  # Unlimited
-                'max_monte_carlo_runs': -1,  # Unlimited
+                'max_projection_runs': 9999,  # Effectively unlimited
+                'max_scenarios': 9999,  # Effectively unlimited
+                'max_monte_carlo_runs': 9999,  # Effectively unlimited
                 'max_simulations_per_run': 10000,
                 'advanced_strategies': True,
                 'multi_person_projections': True,
@@ -89,7 +61,7 @@ class Command(BaseCommand):
             self.stdout.write(f'• Updated {professional.display_name} tier')
         
         # Update legacy tiers to inactive
-        legacy_tiers = ['basic', 'premium', 'enterprise', 'free', 'professional_monthly']
+        legacy_tiers = ['basic', 'premium', 'enterprise', 'free', 'professional_monthly', 'individual_pack']
         for tier_name in legacy_tiers:
             try:
                 tier = SubscriptionTier.objects.get(name=tier_name)
@@ -100,9 +72,9 @@ class Command(BaseCommand):
                 pass
         
         self.stdout.write(
-            self.style.SUCCESS('\nNew pricing tiers setup complete!')
+            self.style.SUCCESS('\nPricing tiers setup complete!')
         )
         self.stdout.write('\nPricing structure:')
-        self.stdout.write('• Individual: 3 projections, 1 scenario, 1 monte carlo run (can purchase packs)')
-        self.stdout.write('• Individual Pack: $20 for 25 projections, 5 scenarios, 10 monte carlo runs')
+        self.stdout.write('• Individual: 3 projections, 1 scenario, 1 monte carlo run per month')
+        self.stdout.write('  - Can purchase credits: $20 for 25 projections, 5 scenarios, 10 monte carlo runs')
         self.stdout.write('• Professional: $200/month for unlimited everything')

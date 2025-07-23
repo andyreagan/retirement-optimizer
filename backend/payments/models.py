@@ -9,18 +9,11 @@ class SubscriptionTier(models.Model):
         ('individual', 'Individual'),
         ('individual_pack', 'Individual Pack'),
         ('professional', 'Professional'),
-        ('free', 'Free'),  # Legacy
-        ('professional_monthly', 'Professional Monthly'),  # Legacy
-        ('basic', 'Basic'),  # Legacy
-        ('premium', 'Premium'),  # Legacy
-        ('enterprise', 'Enterprise')  # Legacy
     ]
     
     PRICING_TYPE_CHOICES = [
-        ('free', 'Free'),
         ('pack', 'Pay-per-use Pack'),
         ('monthly', 'Monthly Subscription'),
-        ('annual', 'Annual Subscription')
     ]
     
     name = models.CharField(max_length=50, choices=TIER_CHOICES, unique=True)
@@ -29,11 +22,9 @@ class SubscriptionTier(models.Model):
     
     # Pricing for different types
     price_monthly = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    price_annual = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     pack_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # One-time pack price
     
     stripe_price_id_monthly = models.CharField(max_length=100, blank=True)
-    stripe_price_id_annual = models.CharField(max_length=100, blank=True)
     stripe_price_id_pack = models.CharField(max_length=100, blank=True)
     
     # Feature limits (for packs, these are credits per purchase)
@@ -77,7 +68,6 @@ class UserSubscription(models.Model):
     
     BILLING_CYCLE_CHOICES = [
         ('monthly', 'Monthly'),
-        ('annual', 'Annual'),
         ('pack', 'Pack'),
     ]
     
@@ -140,71 +130,39 @@ class UserSubscription(models.Model):
                     'remaining': self.monte_carlo_credits
                 }
             }
-        elif self.tier.pricing_type in ['monthly', 'annual']:
-            if self.tier.max_projection_runs == -1:  # Unlimited
-                return {
-                    'projection_runs': {
-                        'used': self.projection_runs_used,
-                        'limit': -1,
-                        'remaining': -1  # Unlimited
-                    },
-                    'scenarios': {
-                        'used': self.scenarios_used,
-                        'limit': -1,
-                        'remaining': -1
-                    },
-                    'monte_carlo': {
-                        'used': self.monte_carlo_runs_used,
-                        'limit': -1,
-                        'remaining': -1
-                    }
-                }
-            else:
-                return {
-                    'projection_runs': {
-                        'used': self.projection_runs_used,
-                        'limit': self.tier.max_projection_runs,
-                        'remaining': max(0, self.tier.max_projection_runs - self.projection_runs_used)
-                    },
-                    'scenarios': {
-                        'used': self.scenarios_used,
-                        'limit': self.tier.max_scenarios,
-                        'remaining': max(0, self.tier.max_scenarios - self.scenarios_used)
-                    },
-                    'monte_carlo': {
-                        'used': self.monte_carlo_runs_used,
-                        'limit': self.tier.max_monte_carlo_runs,
-                        'remaining': max(0, self.tier.max_monte_carlo_runs - self.monte_carlo_runs_used)
-                    }
-                }
-        else:
-            # Free tier
+        elif self.tier.name == 'professional':  # Unlimited
             return {
                 'projection_runs': {
                     'used': self.projection_runs_used,
-                    'limit': self.tier.max_projection_runs,
-                    'remaining': max(0, self.tier.max_projection_runs - self.projection_runs_used)
+                    'limit': -1,
+                    'remaining': -1  # Unlimited
                 },
                 'scenarios': {
                     'used': self.scenarios_used,
-                    'limit': self.tier.max_scenarios,
-                    'remaining': max(0, self.tier.max_scenarios - self.scenarios_used)
+                    'limit': -1,
+                    'remaining': -1
                 },
                 'monte_carlo': {
                     'used': self.monte_carlo_runs_used,
-                    'limit': self.tier.max_monte_carlo_runs,
-                    'remaining': max(0, self.tier.max_monte_carlo_runs - self.monte_carlo_runs_used)
+                    'limit': -1,
+                    'remaining': -1
                 }
             }
-    
-    def reset_usage(self):
-        """Reset monthly usage counters (only for monthly/annual subscriptions)"""
-        if self.tier.pricing_type in ['monthly', 'annual']:
-            self.projection_runs_used = 0
-            self.scenarios_used = 0
-            self.monte_carlo_runs_used = 0
-            self.last_reset_date = timezone.now()
-            self.save()
+        else:
+            return {
+                'projection_runs': {
+                    'used': self.projection_runs_used,
+                    'remaining': self.projection_credits
+                },
+                'scenarios': {
+                    'used': self.scenarios_used,
+                    'remaining': self.scenario_credits
+                },
+                'monte_carlo': {
+                    'used': self.monte_carlo_runs_used,
+                    'remaining': self.monte_carlo_credits
+                }
+            }
     
     def add_credits(self, projection_credits=0, scenario_credits=0, monte_carlo_credits=0):
         """Add credits to user account (for pack purchases)"""
@@ -215,78 +173,27 @@ class UserSubscription(models.Model):
     
     def use_projection_credit(self):
         """Use a projection credit, returns True if successful"""
-        if self.tier.pricing_type == 'pack':
-            if self.projection_credits > 0:
-                self.projection_credits -= 1
-                self.save()
-                return True
-            return False
-        elif self.tier.pricing_type in ['monthly', 'annual']:
-            if self.tier.max_projection_runs == -1:  # Unlimited
-                self.projection_runs_used += 1
-                self.save()
-                return True
-            elif self.projection_runs_used < self.tier.max_projection_runs:
-                self.projection_runs_used += 1
-                self.save()
-                return True
-            return False
-        else:  # Free tier
-            if self.projection_runs_used < self.tier.max_projection_runs:
-                self.projection_runs_used += 1
-                self.save()
-                return True
-            return False
+        if self.tier.name == 'professional':
+            return True
+        self.projection_credits -= 1
+        self.save()
+        return self.projection_credits >= 0
     
     def use_scenario_credit(self):
         """Use a scenario credit, returns True if successful"""
-        if self.tier.pricing_type == 'pack':
-            if self.scenario_credits > 0:
-                self.scenario_credits -= 1
-                self.save()
-                return True
-            return False
-        elif self.tier.pricing_type in ['monthly', 'annual']:
-            if self.tier.max_scenarios == -1:  # Unlimited
-                self.scenarios_used += 1
-                self.save()
-                return True
-            elif self.scenarios_used < self.tier.max_scenarios:
-                self.scenarios_used += 1
-                self.save()
-                return True
-            return False
-        else:  # Free tier
-            if self.scenarios_used < self.tier.max_scenarios:
-                self.scenarios_used += 1
-                self.save()
-                return True
-            return False
-    
+        if self.tier.name == 'professional':
+            return True
+        self.scenario_credits -= 1
+        self.save()
+        return self.scenario_credits >= 0
+
     def use_monte_carlo_credit(self):
         """Use a monte carlo credit, returns True if successful"""
-        if self.tier.pricing_type == 'pack':
-            if self.monte_carlo_credits > 0:
-                self.monte_carlo_credits -= 1
-                self.save()
-                return True
-            return False
-        elif self.tier.pricing_type in ['monthly', 'annual']:
-            if self.tier.max_monte_carlo_runs == -1:  # Unlimited
-                self.monte_carlo_runs_used += 1
-                self.save()
-                return True
-            elif self.monte_carlo_runs_used < self.tier.max_monte_carlo_runs:
-                self.monte_carlo_runs_used += 1
-                self.save()
-                return True
-            return False
-        else:  # Free tier
-            if self.monte_carlo_runs_used < self.tier.max_monte_carlo_runs:
-                self.monte_carlo_runs_used += 1
-                self.save()
-                return True
-            return False
+        if self.tier.name == 'professional':
+            return True
+        self.monte_carlo_credits -= 1
+        self.save()
+        return self.monte_carlo_credits >= 0
     
     def __str__(self):
         return f"{self.user.username} - {self.tier.display_name} ({self.status})"

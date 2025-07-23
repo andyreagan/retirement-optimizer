@@ -40,7 +40,7 @@
     if (tier.pricing_type === 'pack') {
       return tier.pack_price
     }
-    return billingCycle === 'annual' ? tier.price_annual : tier.price_monthly
+    return billingCycle === 'annual' ? (tier.price_annual || tier.price_monthly) : tier.price_monthly
   }
   
   function getPricingLabel(tier) {

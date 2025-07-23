@@ -5,6 +5,7 @@ A comprehensive retirement planning application with Monte Carlo simulation, Str
 ## Features
 
 ### Core Functionality
+
 - **Multi-Account Support**: 401k, Roth IRA, HSA, Brokerage accounts with proper tax treatment
 - **Monte Carlo Simulation**: Range-based projections with market volatility modeling
 - **Multiple Strategies**: Various contribution and withdrawal optimization strategies
@@ -12,6 +13,7 @@ A comprehensive retirement planning application with Monte Carlo simulation, Str
 - **Tax Optimization**: Sophisticated tax-aware contribution and withdrawal sequencing
 
 ### Payment & Subscription System
+
 - **Stripe Integration**: Complete payment processing with webhooks
 - **Flexible Pricing**: Individual pay-per-use packs and professional monthly subscriptions
 - **Individual Packs**: $20 one-time purchase for personal retirement planning
@@ -21,6 +23,7 @@ A comprehensive retirement planning application with Monte Carlo simulation, Str
 - **Excel Export**: Paywall-protected spreadsheet export functionality
 
 ### Advanced Features
+
 - **Mortality Modeling**: Joint survival probability calculations
 - **Inflation Adjustments**: Real-time cash flow adjustments
 - **Asset Allocation**: Dynamic portfolio rebalancing based on market scenarios
@@ -29,12 +32,14 @@ A comprehensive retirement planning application with Monte Carlo simulation, Str
 ## Architecture
 
 ### Backend (Django + Python)
+
 - **Django REST API**: Full REST API with authentication
 - **Account Classes**: OOP design with self-contained account logic
 - **Strategy Pattern**: Pluggable contribution/withdrawal strategies
 - **Monte Carlo Engine**: Parallel processing for performance
 
 ### Frontend (Svelte)
+
 - **Svelte SPA**: Modern reactive UI
 - **Chart.js Integration**: Interactive charts and visualizations
 - **Subscription Management**: User dashboard with billing portal
@@ -43,6 +48,7 @@ A comprehensive retirement planning application with Monte Carlo simulation, Str
 ## Local Development Setup
 
 ### Prerequisites
+
 - Python 3.8+
 - Node.js 16+ (for building frontend)
 - SQLite (included with Python)
@@ -53,60 +59,69 @@ A comprehensive retirement planning application with Monte Carlo simulation, Str
 ### Quick Start (Single Server)
 
 1. **Navigate to backend directory**
-   ```bash
-   cd backend
-   ```
+
+```bash
+cd backend
+```
 
 2. **Create virtual environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
 
 3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+
+```bash
+pip install -r requirements.txt
+```
 
 4. **Configure environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your actual values:
-   # - SECRET_KEY (generate new one for production)
-   # - STRIPE_PUBLISHABLE_KEY=pk_test_your_actual_publishable_key
-   # - STRIPE_SECRET_KEY=sk_test_your_actual_secret_key
-   # - STRIPE_WEBHOOK_SECRET=whsec_your_actual_webhook_secret
-   ```
+
+```bash
+cp .env.example .env
+# Edit .env with your actual values:
+# - SECRET_KEY (generate new one for production)
+# - STRIPE_PUBLISHABLE_KEY=pk_test_your_actual_publishable_key
+# - STRIPE_SECRET_KEY=sk_test_your_actual_secret_key
+# - STRIPE_WEBHOOK_SECRET=whsec_your_actual_webhook_secret
+```
 
 5. **Run migrations**
-   ```bash
-   python manage.py makemigrations
-   python manage.py migrate
-   ```
+
+```bash
+python manage.py makemigrations
+python manage.py migrate
+```
 
 6. **Create superuser**
-   ```bash
-   python manage.py createsuperuser
-   ```
+
+```bash
+python manage.py createsuperuser
+```
 
 7. **Setup pricing tiers**
-   ```bash
-   python manage.py setup_new_pricing_tiers
-   ```
+
+```bash
+python manage.py setup_pricing_tiers
+```
 
 8. **Build and serve the frontend**
-   ```bash
-   cd ..
-   ./build_frontend.sh
-   cd backend
-   ```
+
+```bash
+cd ..
+./build_frontend.sh
+cd backend
+```
 
 9. **Start the server**
-   ```bash
-   python manage.py runserver
-   ```
 
-   🎉 **The entire application is now available at `http://localhost:8000`**
+```bash
+python manage.py runserver
+```
+
+🎉 **The entire application is now available at `http://localhost:8000`**
 
 ### Frontend Development
 
