@@ -6,8 +6,55 @@ from django.core.management import call_command
 
 def setup_initial_data(apps, schema_editor):
     """Setup pricing tiers and Google OAuth with placeholder credentials"""
-    # Setup pricing tiers
-    call_command('setup_pricing_tiers')
+    # Get the historical model
+    SubscriptionTier = apps.get_model('payments', 'SubscriptionTier')
+    
+    # Create Individual tier
+    SubscriptionTier.objects.get_or_create(
+        name='individual',
+        defaults={
+            'display_name': 'Individual',
+            'pricing_type': 'monthly',
+            'price_monthly': 0,
+            'price_annual': 0,  # This field still exists in migration 0002
+            'pack_price': 0,
+            'max_projection_runs': 3,
+            'max_scenarios': 1,
+            'max_monte_carlo_runs': 1,
+            'max_simulations_per_run': 1000,
+            'advanced_strategies': False,
+            'multi_person_projections': False,
+            'excel_export': False,
+            'priority_support': False,
+            'api_access': False,
+            'household_locked': False,
+            'is_active': True
+        }
+    )
+    
+    # Create Professional tier
+    SubscriptionTier.objects.get_or_create(
+        name='professional',
+        defaults={
+            'display_name': 'Professional',
+            'pricing_type': 'monthly',
+            'price_monthly': 200.00,
+            'price_annual': 0,  # This field still exists in migration 0002
+            'pack_price': 0,
+            'max_projection_runs': 9999,
+            'max_scenarios': 9999,
+            'max_monte_carlo_runs': 9999,
+            'max_simulations_per_run': 10000,
+            'advanced_strategies': True,
+            'multi_person_projections': True,
+            'excel_export': True,
+            'priority_support': True,
+            'api_access': True,
+            'household_locked': False,
+            'is_active': True
+        }
+    )
+    
     # Setup Google OAuth
     call_command('setup_google_oauth')
 

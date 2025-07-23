@@ -12,9 +12,8 @@ class Command(BaseCommand):
             name='individual',
             defaults={
                 'display_name': 'Individual',
-                'pricing_type': 'free',
+                'pricing_type': 'monthly',
                 'price_monthly': 0,
-                'price_annual': 0,
                 'pack_price': 0,
                 'max_projection_runs': 3,
                 'max_scenarios': 1,
@@ -42,7 +41,6 @@ class Command(BaseCommand):
                 'display_name': 'Professional',
                 'pricing_type': 'monthly',
                 'price_monthly': 200.00,
-                'price_annual': 0,  # Not offering annual
                 'pack_price': 0,
                 'max_projection_runs': 9999,  # Effectively unlimited
                 'max_scenarios': 9999,  # Effectively unlimited
