@@ -308,3 +308,9 @@ For issues and questions:
 - **Frontend Issues**: Check browser console and network tab
 - **Payment Issues**: Verify Stripe webhook configuration
 - **Database Issues**: Check SQLite database at `backend/db.sqlite3`
+
+## Inspiration
+
+https://www.ramseysolutions.com/
+https://moneyguy.com/guide/foo/
+
