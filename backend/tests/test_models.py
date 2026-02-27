@@ -3,134 +3,8 @@ Unit tests for Django models
 """
 import pytest
 from django.contrib.auth.models import User
-from datetime import datetime, timedelta
-from decimal import Decimal
 
-# Import models to test
-from payments.models import SubscriptionTier, UserSubscription, UsageEvent
-from api.models import RetirementScenario, ProjectionResult
-
-
-@pytest.mark.django_db
-class TestSubscriptionTier:
-    """Test SubscriptionTier model"""
-    
-    def test_create_subscription_tier(self):
-        """Test creating a subscription tier"""
-        tier = SubscriptionTier.objects.create(
-            name='test_tier',
-            display_name='Test Tier',
-            price_monthly=9.99,
-            max_scenarios=10,
-            max_monte_carlo_runs=5,
-            max_simulations_per_run=1000
-        )
-        
-        assert tier.name == 'test_tier'
-        assert tier.display_name == 'Test Tier'
-        assert float(tier.price_monthly) == 9.99
-        assert tier.max_scenarios == 10
-        assert tier.max_monte_carlo_runs == 5
-        assert tier.max_simulations_per_run == 1000
-    
-    def test_str_representation(self):
-        """Test string representation of tier"""
-        tier = SubscriptionTier(display_name='Premium')
-        assert str(tier) == 'Premium'
-    
-    def test_unlimited_values(self):
-        """Test that -1 represents unlimited"""
-        tier = SubscriptionTier.objects.create(
-            name='unlimited',
-            display_name='Unlimited',
-            price_monthly=29.99,
-            max_scenarios=-1,
-            max_monte_carlo_runs=-1,
-            max_simulations_per_run=-1
-        )
-        
-        assert tier.max_scenarios == -1  # Unlimited
-        assert tier.max_monte_carlo_runs == -1  # Unlimited
-
-
-@pytest.mark.django_db
-class TestUserSubscription:
-    """Test UserSubscription model"""
-    
-    @pytest.fixture
-    def user(self):
-        return User.objects.create_user(
-            username='testuser',
-            email='test@example.com',
-            password='testpass123'
-        )
-    
-    @pytest.fixture
-    def tier(self):
-        return SubscriptionTier.objects.create(
-            name='test_individual',
-            display_name='Test Individual',
-            price_monthly=0,
-            max_scenarios=3,
-            max_monte_carlo_runs=1
-        )
-    
-    def test_create_subscription(self, user, tier):
-        """Test creating a user subscription"""
-        subscription = UserSubscription.objects.create(
-            user=user,
-            tier=tier,
-            status='active'
-        )
-        
-        assert subscription.user == user
-        assert subscription.tier == tier
-        assert subscription.status == 'active'
-        assert subscription.scenarios_used == 0
-        assert subscription.monte_carlo_runs_used == 0
-    
-    def test_reset_usage(self, user, tier):
-        """Test resetting usage counters"""
-        # Skip this test as reset_usage method doesn't exist
-        pytest.skip("reset_usage method not implemented")
-    
-    def test_get_usage_limits(self, user, tier):
-        """Test getting usage limits with current usage"""
-        subscription = UserSubscription.objects.create(
-            user=user,
-            tier=tier,
-            status='active',
-            scenarios_used=1,
-            monte_carlo_runs_used=0
-        )
-        
-        limits = subscription.get_usage_limits()
-        
-        # Check the structure based on actual implementation
-        assert 'scenarios' in limits
-        assert 'monte_carlo' in limits
-        assert 'projection_runs' in limits
-    
-    def test_can_use_feature(self, user, tier):
-        """Test checking if user can use a feature"""
-        subscription = UserSubscription.objects.create(
-            user=user,
-            tier=tier,
-            status='active',
-            scenarios_used=2,
-            monte_carlo_runs_used=0
-        )
-        
-        # Test with actual tier features
-        assert subscription.can_use_feature('advanced_strategies') is False
-        assert subscription.can_use_feature('multi_person_projections') is False
-        
-        # Test subscription is active
-        assert subscription.is_active() is True
-        
-        # Test inactive subscription
-        subscription.status = 'canceled'
-        assert subscription.is_active() is False
+from api.models import RetirementScenario, ProjectionResult, UsageEvent
 
 
 @pytest.mark.django_db
@@ -182,7 +56,6 @@ class TestRetirementScenario:
             death_age=85
         )
         
-        # Wait a moment to ensure different timestamps
         import time
         time.sleep(0.1)
         
@@ -194,7 +67,7 @@ class TestRetirementScenario:
         )
         
         scenarios = RetirementScenario.objects.all().order_by('-updated_at')
-        assert scenarios[0] == scenario2  # Most recent first
+        assert scenarios[0] == scenario2
         assert scenarios[1] == scenario1
 
 
@@ -230,7 +103,6 @@ class TestUsageEvent:
             'scenario_saved',
             'monte_carlo_run',
             'excel_export',
-            'api_call'
         ]
         
         for event_type in event_types:

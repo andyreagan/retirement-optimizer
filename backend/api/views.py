@@ -2,10 +2,8 @@ from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.http import JsonResponse, HttpResponse
-import sys
-import os
+import json
 
-# Import from local copies in the retirement_backend directory
 from main import RetirementProjection
 from monte_carlo import MonteCarloSimulator, MonteCarloConfig
 from accounts import Account401k, RothIRA, Brokerage, HSA
@@ -17,7 +15,7 @@ from strategies import (
     create_simple_lifecycle_strategy, create_tax_optimization_strategy,
     create_retirement_glide_path, create_tax_managed_withdrawal
 )
-from .models import RetirementScenario, AccountConfiguration, ProjectionResult
+from .models import RetirementScenario, AccountConfiguration, ProjectionResult, UsageEvent
 from .serializers import (
     RetirementScenarioSerializer, 
     ProjectionRequestSerializer,
@@ -25,22 +23,23 @@ from .serializers import (
 )
 from .excel_export import create_excel_export
 
+
+def log_usage(user, event_type, metadata=None):
+    """Log a usage event for analytics."""
+    UsageEvent.objects.create(
+        user=user,
+        event_type=event_type,
+        metadata=json.dumps(metadata or {})
+    )
+
+
 def migrate_scenario_schema(request_data):
     """Migrate scenario data from older schema versions to current version"""
     schema_version = request_data.get('schema_version', 'legacy')
-    
-    if schema_version == 'legacy':
-        # Legacy scenarios (before versioning) - no migration needed yet
-        # Future versions can add migration logic here
-        pass
-    elif schema_version == '1.0':
-        # Current version - no migration needed
-        pass
-    else:
-        # Unknown version - log warning but proceed
+    if schema_version not in ('legacy', '1.0'):
         print(f"Warning: Unknown schema version {schema_version}, proceeding with current logic")
-    
     return request_data
+
 
 def create_contribution_strategy(data):
     """Create contribution strategy based on user selection"""
@@ -50,37 +49,29 @@ def create_contribution_strategy(data):
     if strategy_type == 'priority':
         priorities = options.get('priorities', ['401k', 'roth_ira', 'hsa', 'brokerage'])
         return PriorityContribution(priorities)
-    
     elif strategy_type == 'proportional':
         allocations = options.get('allocations', {'401k': 0.6, 'roth_ira': 0.3, 'brokerage': 0.1})
         return ProportionalContribution(allocations)
-    
     elif strategy_type == 'tax_optimized':
         return TaxOptimizedContribution()
-    
     elif strategy_type == 'lifecycle':
         return create_simple_lifecycle_strategy()
-    
     elif strategy_type == 'custom_percentage':
         age_ranges = options.get('age_ranges', [])
         if age_ranges:
-            # Convert frontend format to AgeBasedAllocation objects
             from strategies.advanced_percentage_contribution import AgeBasedAllocation
-            allocations = []
-            for range_data in age_ranges:
-                allocations.append(AgeBasedAllocation(
-                    start_age=range_data['start_age'],
-                    end_age=range_data['end_age'],
-                    allocations=range_data['allocations']
-                ))
+            allocations = [
+                AgeBasedAllocation(
+                    start_age=r['start_age'],
+                    end_age=r['end_age'],
+                    allocations=r['allocations']
+                ) for r in age_ranges
+            ]
             return AdvancedPercentageContribution(allocations)
-        else:
-            # Fallback to lifecycle if no ranges provided
-            return create_simple_lifecycle_strategy()
-    
+        return create_simple_lifecycle_strategy()
     else:
-        # Default fallback
         return PriorityContribution(['401k', 'roth_ira', 'hsa', 'brokerage'])
+
 
 def create_withdrawal_strategy(data):
     """Create withdrawal strategy based on user selection"""
@@ -90,50 +81,39 @@ def create_withdrawal_strategy(data):
     if strategy_type == 'sequential':
         priorities = options.get('priorities', ['brokerage', '401k', 'roth_ira', 'hsa'])
         return SequentialWithdrawal(priorities)
-    
     elif strategy_type == 'proportional':
         allocations = options.get('allocations', {'brokerage': 0.5, '401k': 0.3, 'roth_ira': 0.2})
         return ProportionalWithdrawal(allocations)
-    
     elif strategy_type == 'tax_optimized':
         return TaxOptimizedWithdrawal()
-    
     elif strategy_type == 'glide_path':
         return create_retirement_glide_path()
-    
     elif strategy_type == 'custom_percentage':
         age_ranges = options.get('age_ranges', [])
         if age_ranges:
-            # Convert frontend format to AgeBasedWithdrawalAllocation objects
             from strategies.advanced_percentage_withdrawal import AgeBasedWithdrawalAllocation
-            allocations = []
-            for range_data in age_ranges:
-                allocations.append(AgeBasedWithdrawalAllocation(
-                    start_age=range_data['start_age'],
-                    end_age=range_data['end_age'],
-                    allocations=range_data['allocations']
-                ))
+            allocations = [
+                AgeBasedWithdrawalAllocation(
+                    start_age=r['start_age'],
+                    end_age=r['end_age'],
+                    allocations=r['allocations']
+                ) for r in age_ranges
+            ]
             return AdvancedPercentageWithdrawal(allocations)
-        else:
-            # Fallback to glide path if no ranges provided
-            return create_retirement_glide_path()
-    
+        return create_retirement_glide_path()
     else:
-        # Default fallback
         return TaxOptimizedWithdrawal()
+
 
 def generate_annual_cash_flows(data):
     """Generate annual income and expense arrays from cash flow items or use provided arrays"""
-    # Handle new multi-person format
     if 'people' in data and data['people'] and len(data['people']) > 0:
         return generate_multi_person_cash_flows(data)
     
-    # Handle old single-person format
-    start_age = data.get('start_age', 25)  # Default to age 25
-    death_age = data.get('death_age', 100)  # Default to age 100
+    start_age = data.get('start_age', 25)
+    death_age = data.get('death_age', 100)
     num_years = death_age - start_age + 1
     
-    # If cash flow items are provided, use them
     if 'cash_flow_items' in data and data['cash_flow_items']:
         annual_income = [0.0] * num_years
         annual_expenses = [0.0] * num_years
@@ -144,48 +124,34 @@ def generate_annual_cash_flows(data):
             base_amount = float(item['amount'])
             annual_adjustment = float(item.get('annual_adjustment', 0.0))
             
-            # Calculate for each year in the item's range
             for year in range(num_years):
                 current_age = start_age + year
-                
                 if item_start_age <= current_age <= item_end_age:
-                    # Apply annual adjustment (compound growth/inflation)
                     years_since_start = current_age - item_start_age
                     adjusted_amount = base_amount * ((1 + annual_adjustment) ** years_since_start)
-                    
                     if item['type'] == 'income':
                         annual_income[year] += adjusted_amount
-                    else:  # expense
+                    else:
                         annual_expenses[year] += adjusted_amount
         
         return annual_income, annual_expenses
-    
-    # Otherwise use provided arrays (backward compatibility)
     else:
         annual_income = data.get('annual_income', [0.0] * num_years)
         annual_expenses = data.get('annual_expenses', [0.0] * num_years)
         return annual_income, annual_expenses
 
+
 def generate_multi_person_cash_flows(data):
     """Generate cash flows for multi-person scenarios with calendar year tracking"""
-    from .mortality import calculate_joint_survival_probability
     from datetime import datetime
     
     people = data['people']
-    start_year = data.get('start_year', datetime.now().year)
-    
-    # Find the oldest person's potential end age (120)
-    oldest_person_max_age = 120
     youngest_person_current_age = min(person['current_age'] for person in people)
-    oldest_person_current_age = max(person['current_age'] for person in people)
-    
-    # Calculate projection length: run until oldest person would be 120
-    max_projection_years = oldest_person_max_age - youngest_person_current_age + 1
+    max_projection_years = 120 - youngest_person_current_age + 1
     
     annual_income = [0.0] * max_projection_years
     annual_expenses = [0.0] * max_projection_years
     
-    # Generate cash flows from items
     if 'cash_flow_items' in data and data['cash_flow_items']:
         for item in data['cash_flow_items']:
             item_start_age = item['start_age']
@@ -193,23 +159,18 @@ def generate_multi_person_cash_flows(data):
             base_amount = float(item['amount'])
             annual_adjustment = float(item.get('annual_adjustment', 0.0))
             
-            # Calculate for each year in the projection
             for year in range(max_projection_years):
-                # For multi-person, we use the youngest person's age as the reference
-                # This might need refinement based on which person the cash flow applies to
                 reference_age = youngest_person_current_age + year
-                
                 if item_start_age <= reference_age <= item_end_age:
-                    # Apply annual adjustment (compound growth/inflation)
                     years_since_start = reference_age - item_start_age
                     adjusted_amount = base_amount * ((1 + annual_adjustment) ** years_since_start)
-                    
                     if item['type'] == 'income':
                         annual_income[year] += adjusted_amount
-                    else:  # expense
+                    else:
                         annual_expenses[year] += adjusted_amount
     
     return annual_income, annual_expenses
+
 
 def run_multi_person_projection(projection, data):
     """Run projection for multi-person scenarios with mortality tracking"""
@@ -220,29 +181,22 @@ def run_multi_person_projection(projection, data):
     people = data['people']
     start_year = data.get('start_year', datetime.now().year)
     
-    # Generate cash flows
-    annual_income, annual_expenses = generate_multi_person_cash_flows(data)
-    
-    # Use the first person as the reference for the main projection
-    # This is more intuitive - the projection age will match the first person's age
-    reference_person = people[0]  # Use first person as reference
+    reference_person = people[0]
     youngest_person = min(people, key=lambda p: p['current_age'])
     oldest_person = max(people, key=lambda p: p['current_age'])
     
-    # Calculate projection end: reasonable maximum age (100 years old for reference person)
     max_projection_age = 100
     projection_years = max_projection_age - reference_person['current_age'] + 1
-    projection_end_age = max_projection_age
     
-    # Run the base projection using the retirement logic
+    annual_income, annual_expenses = generate_multi_person_cash_flows(data)
+    
     results_df = projection.run_projection(
         start_age=reference_person['current_age'],
-        death_age=projection_end_age,
+        death_age=max_projection_age,
         annual_income=annual_income[:projection_years],
         annual_expenses=annual_expenses[:projection_years]
     )
     
-    # Add mortality and calendar year columns
     mortality_data = []
     for index, row in results_df.iterrows():
         year_offset = int(row['year'])
@@ -251,25 +205,17 @@ def run_multi_person_projection(projection, data):
         youngest_age = youngest_person['current_age'] + year_offset
         oldest_age = oldest_person['current_age'] + year_offset
         
-        # Calculate survival probabilities for this year
         current_people = []
         individual_cumulative_probs = []
         for person in people:
             current_age = person['current_age'] + year_offset
-            current_people.append({
-                'age': current_age,
-                'gender': person['gender']
-            })
-            
-            # Calculate cumulative survival probability from start to current age
+            current_people.append({'age': current_age, 'gender': person['gender']})
             cumulative_prob = calculate_cumulative_survival_probability(
                 person['current_age'], current_age, person['gender']
             )
             individual_cumulative_probs.append(cumulative_prob)
         
         survival_probs = calculate_joint_survival_probability(current_people, 1)
-        
-        # Calculate joint cumulative survival (both people surviving from start to current year)
         joint_cumulative_survival = 1.0
         for prob in individual_cumulative_probs:
             joint_cumulative_survival *= prob
@@ -286,128 +232,94 @@ def run_multi_person_projection(projection, data):
             'joint_cumulative_survival_prob': joint_cumulative_survival
         })
     
-    # Add mortality columns to results DataFrame
     mortality_df = pd.DataFrame(mortality_data)
     enhanced_df = pd.concat([results_df, mortality_df], axis=1)
     
-    # Calculate net worth when <5% chance both are alive
     mortality_95pct_year = None
     net_worth_95pct = 0.0
-    
     for i, row in enhanced_df.iterrows():
-        if row['survival_prob_both'] < 0.05:  # Less than 5% chance both alive
+        if row['survival_prob_both'] < 0.05:
             mortality_95pct_year = i
             net_worth_95pct = row['total_account_balance']
             break
     
-    # If we never reach <5% threshold, use the last year
     if mortality_95pct_year is None:
         mortality_95pct_year = len(enhanced_df) - 1
         net_worth_95pct = enhanced_df.iloc[-1]['total_account_balance']
     
-    # Add summary information
     enhanced_df['net_worth_95pct_mortality'] = net_worth_95pct
     enhanced_df['mortality_95pct_year'] = mortality_95pct_year
     enhanced_df['mortality_95pct_age'] = enhanced_df.iloc[mortality_95pct_year]['reference_age'] if mortality_95pct_year < len(enhanced_df) else None
     
     return enhanced_df
 
+
+def _create_projection_accounts(data):
+    """Create account objects from request data."""
+    growth_rate = data.get('growth_rate', 0.03)
+    accounts = {}
+    
+    for account_config in data['accounts']:
+        account_type = account_config['account_type']
+        initial_balance = float(account_config['initial_balance'])
+        params = account_config.get('parameters', {})
+        
+        if account_type == '401k':
+            account = Account401k(
+                initial_balance=initial_balance,
+                company_match_percentage=params.get('company_match_percentage', 0.05),
+                company_match_limit=params.get('company_match_limit', 0.06),
+                automatic_contribution_percentage=params.get('automatic_contribution_percentage', 0.0),
+                mega_backdoor_roth_percentage=params.get('mega_backdoor_roth_percentage', 0.0),
+                mega_backdoor_roth_limit=params.get('mega_backdoor_roth_limit', 0.0),
+                annual_return=growth_rate
+            )
+        elif account_type == 'roth_ira':
+            account = RothIRA(
+                initial_balance=initial_balance,
+                initial_contributions=params.get('initial_contributions', 0.0),
+                annual_return=growth_rate
+            )
+        elif account_type == 'brokerage':
+            cost_basis = params.get('initial_cost_basis', initial_balance * 0.8)
+            account = Brokerage(initial_balance=initial_balance, initial_cost_basis=cost_basis, annual_return=growth_rate)
+        elif account_type == 'hsa':
+            account = HSA(initial_balance=initial_balance, annual_return=growth_rate)
+        else:
+            continue
+        
+        accounts[account_type] = account
+    
+    return accounts
+
+
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def run_projection(request):
     """Run a retirement projection"""
-    from django.db import transaction
-    
     serializer = ProjectionRequestSerializer(data=request.data)
-    
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     data = serializer.validated_data
     
-    # Check if user can run projection without deducting credit yet
-    from payments.models import UserSubscription, SubscriptionTier
-    
     try:
-        subscription = UserSubscription.objects.get(user=request.user)
-    except UserSubscription.DoesNotExist:
-        # Create default individual subscription for new users
-        individual_tier = SubscriptionTier.objects.get(name='individual')
-        subscription = UserSubscription.objects.create(
-            user=request.user,
-            tier=individual_tier,
-            status='active',
-            projection_credits=3,
-            scenario_credits=1,
-            monte_carlo_credits=1
-        )
-    
-    # Check if user has credits/limit available (without deducting yet)
-    usage_limits = subscription.get_usage_limits()
-    if usage_limits['projection_runs']['remaining'] <= 0:
-        return Response({
-            'error': 'You have reached your projection run limit. Please upgrade your plan or purchase credits.',
-            'usage_limits': usage_limits
-        }, status=status.HTTP_429_TOO_MANY_REQUESTS)
-    
-    try:
-        # Create strategies based on user selection
         contribution_strategy = create_contribution_strategy(data)
         withdrawal_strategy = create_withdrawal_strategy(data)
         
-        # Create projection
         projection = RetirementProjection(
             contribution_strategy=contribution_strategy,
             withdrawal_strategy=withdrawal_strategy
         )
         
-        # Get global growth rate (default to 3% real return)
-        growth_rate = data.get('growth_rate', 0.03)
-        
-        # Add accounts based on configuration
-        for account_config in data['accounts']:
-            account_type = account_config['account_type']
-            initial_balance = float(account_config['initial_balance'])
-            params = account_config.get('parameters', {})
-            
-            if account_type == '401k':
-                company_match_percentage = params.get('company_match_percentage', 0.05)
-                company_match_limit = params.get('company_match_limit', 0.06)
-                automatic_contribution_percentage = params.get('automatic_contribution_percentage', 0.0)
-                mega_backdoor_roth_percentage = params.get('mega_backdoor_roth_percentage', 0.0)
-                mega_backdoor_roth_limit = params.get('mega_backdoor_roth_limit', 0.0)
-                account = Account401k(
-                    initial_balance=initial_balance,
-                    company_match_percentage=company_match_percentage,
-                    company_match_limit=company_match_limit,
-                    automatic_contribution_percentage=automatic_contribution_percentage,
-                    mega_backdoor_roth_percentage=mega_backdoor_roth_percentage,
-                    mega_backdoor_roth_limit=mega_backdoor_roth_limit,
-                    annual_return=growth_rate
-                )
-            elif account_type == 'roth_ira':
-                initial_contributions = params.get('initial_contributions', 0.0)
-                account = RothIRA(
-                    initial_balance=initial_balance,
-                    initial_contributions=initial_contributions,
-                    annual_return=growth_rate
-                )
-            elif account_type == 'brokerage':
-                cost_basis = params.get('initial_cost_basis', initial_balance * 0.8)
-                account = Brokerage(initial_balance=initial_balance, initial_cost_basis=cost_basis, annual_return=growth_rate)
-            elif account_type == 'hsa':
-                account = HSA(initial_balance=initial_balance, annual_return=growth_rate)
-            else:
-                continue
-            
+        # Add accounts
+        for account_type, account in _create_projection_accounts(data).items():
             projection.add_account(account_type, account)
         
-        # Check if using new multi-person format
+        # Run projection
         if 'people' in data and data['people'] and len(data['people']) > 0:
-            # New multi-person projection
             results_df = run_multi_person_projection(projection, data)
         else:
-            # Legacy single-person projection
             annual_income, annual_expenses = generate_annual_cash_flows(data)
             results_df = projection.run_projection(
                 start_age=data.get('start_age', 25),
@@ -416,10 +328,8 @@ def run_projection(request):
                 annual_expenses=annual_expenses
             )
         
-        # Convert DataFrame to JSON-serializable format
         yearly_data = results_df.to_dict('records')
         
-        # Calculate summary statistics
         final_balance = results_df.iloc[-1]['total_account_balance']
         retirement_year = results_df[results_df['income'] == 0].iloc[0] if len(results_df[results_df['income'] == 0]) > 0 else None
         
@@ -432,32 +342,17 @@ def run_projection(request):
             'total_taxes_paid': float(results_df['taxes_paid'].sum()),
         }
         
-        # Always track projection run usage
-        from payments.models import UsageEvent
-        UsageEvent.objects.create(
-            user=request.user,
-            event_type='projection_run',
-            metadata={
-                'scenario_name': data.get('name', 'Unnamed'),
-                'has_results': True
-            }
-        )
+        # Track usage
+        log_usage(request.user, 'projection_run', {
+            'scenario_name': data.get('name', 'Unnamed'),
+        })
         
-        # Credit was already deducted in the transaction above
-        
-        # Save scenarios only when explicitly requested
-        should_save = request.data.get('save', False)  # Default to False, only save when requested
+        # Save scenario if requested
         scenario_id = None
-        deduct_credit = False  # Flag to track if we should deduct scenario credit
+        should_save = request.data.get('save', False)
         
-        # Check if user can save scenario
-        usage_limits = subscription.get_usage_limits()
-        # Allow saving if: explicitly requested AND (has credits OR updating existing scenario)
-        can_save_scenario = should_save
-        
-        if can_save_scenario:
-            # Create or update scenario
-            scenario_name = data.get('name', f"Projection {subscription.scenarios_used + 1}")
+        if should_save:
+            scenario_name = data.get('name', 'Unnamed Projection')
             scenario_data = {
                 'name': scenario_name,
                 'start_age': data.get('start_age'),
@@ -468,87 +363,43 @@ def run_projection(request):
                 'accounts': data['accounts']
             }
             
-            # Check if scenario with this name already exists for this user
-            from .models import RetirementScenario
-            existing_scenario = None
-            try:
-                existing_scenario = RetirementScenario.objects.get(user=request.user, name=scenario_name)
-            except RetirementScenario.DoesNotExist:
-                pass
+            # Update existing or create new
+            existing_scenario = RetirementScenario.objects.filter(
+                user=request.user, name=scenario_name
+            ).first()
             
             if existing_scenario:
-                # Update existing scenario
                 scenario_serializer = RetirementScenarioSerializer(existing_scenario, data=scenario_data)
-                deduct_credit = False  # Don't deduct credit for updating existing scenario
             else:
-                # Create new scenario - check if user has credits
-                if usage_limits['scenarios']['remaining'] <= 0:
-                    # User can't save new scenarios, skip saving but continue with projection
-                    can_save_scenario = False
-                else:
-                    scenario_serializer = RetirementScenarioSerializer(data=scenario_data)
-                    deduct_credit = True  # Deduct credit for new scenario
+                scenario_serializer = RetirementScenarioSerializer(data=scenario_data)
             
-            # Only proceed with saving if we still can save the scenario            
-            if can_save_scenario and scenario_serializer.is_valid():
+            if scenario_serializer.is_valid():
                 scenario = scenario_serializer.save(user=request.user)
-                
-                # Store the complete request data for reloading with schema version
                 versioned_request_data = dict(request.data)
                 versioned_request_data['schema_version'] = '1.0'
                 scenario.set_request_data(versioned_request_data)
                 scenario.save()
                 
-                # Save results
-                result = ProjectionResult.objects.create(
+                ProjectionResult.objects.update_or_create(
                     scenario=scenario,
-                    yearly_data=yearly_data,
-                    summary_stats=summary_stats
-                )
-                
-                # Track scenario save event
-                UsageEvent.objects.create(
-                    user=request.user,
-                    event_type='scenario_saved',
-                    metadata={
-                        'scenario_id': scenario.id,
-                        'scenario_name': scenario.name,
-                        'explicitly_saved': request.data.get('save', False)
+                    defaults={
+                        'yearly_data': yearly_data,
+                        'summary_stats': summary_stats
                     }
                 )
                 
-                # Scenario will be saved, credit will be deducted after successful projection
+                log_usage(request.user, 'scenario_saved', {
+                    'scenario_id': scenario.id,
+                    'scenario_name': scenario.name,
+                })
                 
                 scenario_id = scenario.id
         
-        # Projection completed successfully - now deduct credits atomically
-        with transaction.atomic():
-            subscription = UserSubscription.objects.select_for_update().get(user=request.user)
-            
-            # Deduct projection credit
-            if not subscription.use_projection_credit():
-                # This shouldn't happen since we checked earlier, but handle gracefully
-                return Response({
-                    'error': 'Credit deduction failed - please try again',
-                    'status': 'error'
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
-            # Deduct scenario credit if scenario was saved and it's a new scenario
-            if scenario_id and deduct_credit and not subscription.use_scenario_credit():
-                # This shouldn't happen either, but handle gracefully
-                return Response({
-                    'error': 'Scenario credit deduction failed - please try again',
-                    'status': 'error'
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        # Build response
         response_data = {
             'yearly_data': yearly_data,
             'summary_stats': summary_stats,
             'status': 'success',
-            'usage_limits': subscription.get_usage_limits()
         }
-        
         if scenario_id:
             response_data['scenario_id'] = scenario_id
         
@@ -560,6 +411,7 @@ def run_projection(request):
             'status': 'error'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def get_scenarios(request):
@@ -567,6 +419,7 @@ def get_scenarios(request):
     scenarios = RetirementScenario.objects.filter(user=request.user)
     serializer = RetirementScenarioSerializer(scenarios, many=True)
     return Response(serializer.data)
+
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
@@ -577,13 +430,9 @@ def get_scenario_results(request, scenario_id):
         result = scenario.result
         serializer = ProjectionResultSerializer(result)
         
-        # Add request data for reloading with schema version validation
         response_data = serializer.data
         request_data = scenario.get_request_data()
-        
-        # Handle schema versioning and migration
         request_data = migrate_scenario_schema(request_data)
-        
         response_data['request_data'] = request_data
         
         return Response(response_data)
@@ -592,47 +441,18 @@ def get_scenario_results(request, scenario_id):
     except ProjectionResult.DoesNotExist:
         return Response({'error': 'Results not found'}, status=status.HTTP_404_NOT_FOUND)
 
+
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def run_monte_carlo(request):
     """Run Monte Carlo simulation on retirement projection"""
-    from django.db import transaction
-    
-    # Validate basic request data
     if not request.data:
         return Response({'error': 'No data provided'}, status=status.HTTP_400_BAD_REQUEST)
     
     data = request.data
     
-    # Check if user can run Monte Carlo without deducting credit yet
-    from payments.models import UserSubscription, SubscriptionTier
-    
     try:
-        subscription = UserSubscription.objects.get(user=request.user)
-    except UserSubscription.DoesNotExist:
-        # Create default individual subscription for new users
-        individual_tier = SubscriptionTier.objects.get(name='individual')
-        subscription = UserSubscription.objects.create(
-            user=request.user,
-            tier=individual_tier,
-            status='active',
-            projection_credits=3,
-            scenario_credits=1,
-            monte_carlo_credits=1
-        )
-    
-    # Check if user has credits/limit available (without deducting yet)
-    usage_limits = subscription.get_usage_limits()
-    if usage_limits['monte_carlo']['remaining'] <= 0:
-        return Response({
-            'error': 'You have reached your Monte Carlo simulation limit. Please upgrade your plan or purchase credits.',
-            'usage_limits': usage_limits
-        }, status=status.HTTP_429_TOO_MANY_REQUESTS)
-    
-    try:
-        # Extract Monte Carlo configuration
         monte_carlo_config = data.get('monte_carlo_config', {})
-        # Cap number of simulations at 1000 for performance
         num_simulations = min(monte_carlo_config.get('num_simulations', 1000), 1000)
         config = MonteCarloConfig(
             num_simulations=num_simulations,
@@ -646,25 +466,18 @@ def run_monte_carlo(request):
             confidence_interval=monte_carlo_config.get('confidence_interval', 90)
         )
         
-        # Create strategies
         contribution_strategy = create_contribution_strategy(data)
         withdrawal_strategy = create_withdrawal_strategy(data)
-        
-        # Generate cash flows
         annual_income, annual_expenses = generate_annual_cash_flows(data)
         
-        # Determine start_age and death_age based on format
         if 'people' in data and data['people'] and len(data['people']) > 0:
-            # Multi-person format: use first person as reference
             reference_person = data['people'][0]
             start_age = reference_person['current_age']
-            death_age = 100  # Standard maximum age for projections
+            death_age = 100
         else:
-            # Single-person format: use provided ages
             start_age = data.get('start_age', 25)
             death_age = data.get('death_age', 100)
         
-        # Prepare projection data for Monte Carlo
         projection_data = {
             'start_age': start_age,
             'death_age': death_age,
@@ -675,35 +488,13 @@ def run_monte_carlo(request):
             'withdrawal_strategy': withdrawal_strategy
         }
         
-        # Run Monte Carlo simulation
         simulator = MonteCarloSimulator(config)
         result = simulator.run_monte_carlo(projection_data)
         
-        # Track usage and increment counter
-        from payments.models import UsageEvent
-        UsageEvent.objects.create(
-            user=request.user,
-            event_type='monte_carlo_run',
-            metadata={
-                'num_simulations': config.num_simulations,
-                'stocks_mean_return': config.stocks_mean_return,
-                'stocks_volatility': config.stocks_volatility,
-                'bonds_mean_return': config.bonds_mean_return,
-                'bonds_volatility': config.bonds_volatility
-            }
-        )
+        log_usage(request.user, 'monte_carlo_run', {
+            'num_simulations': config.num_simulations,
+        })
         
-        # Monte Carlo completed successfully - now deduct credit atomically
-        with transaction.atomic():
-            subscription = UserSubscription.objects.select_for_update().get(user=request.user)
-            if not subscription.use_monte_carlo_credit():
-                # This shouldn't happen since we checked earlier, but handle gracefully
-                return Response({
-                    'error': 'Credit deduction failed - please try again',
-                    'status': 'error'
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        # Convert results to JSON-serializable format
         response_data = {
             'summary_stats': result.summary_stats,
             'percentiles': {
@@ -721,7 +512,6 @@ def run_monte_carlo(request):
                 'confidence_interval': config.confidence_interval
             },
             'status': 'success',
-            'usage_limits': subscription.get_usage_limits()
         }
         
         return Response(response_data)
@@ -731,6 +521,7 @@ def run_monte_carlo(request):
             'error': str(e),
             'status': 'error'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 @api_view(['DELETE'])
 @permission_classes([permissions.IsAuthenticated])
@@ -743,134 +534,64 @@ def delete_scenario(request, scenario_id):
     except RetirementScenario.DoesNotExist:
         return Response({'error': 'Scenario not found'}, status=status.HTTP_404_NOT_FOUND)
 
+
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def export_to_excel(request):
     """Export projection results to Excel format"""
     try:
-        # Check if user has excel export feature
-        from payments.models import UserSubscription
-        
-        try:
-            subscription = UserSubscription.objects.get(user=request.user)
-            if not subscription.can_use_feature('excel_export'):
-                return Response(
-                    {'error': 'Excel export requires a paid subscription'}, 
-                    status=status.HTTP_403_FORBIDDEN
-                )
-        except UserSubscription.DoesNotExist:
-            return Response(
-                {'error': 'No subscription found'}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Get projection data from request
         projection_data = request.data.get('yearly_data', [])
         summary_stats = request.data.get('summary_stats', {})
         scenario_name = request.data.get('scenario_name', 'Retirement Projection')
         
         if not projection_data:
-            return Response(
-                {'error': 'No projection data provided'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': 'No projection data provided'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Create Excel file
         excel_file = create_excel_export(projection_data, summary_stats, scenario_name)
         
-        # Track usage
-        from payments.models import UsageEvent
-        UsageEvent.objects.create(
-            user=request.user,
-            event_type='excel_export',
-            metadata={
-                'scenario_name': scenario_name,
-                'years_exported': len(projection_data)
-            }
-        )
+        log_usage(request.user, 'excel_export', {
+            'scenario_name': scenario_name,
+            'years_exported': len(projection_data)
+        })
         
-        # Create response
         response = HttpResponse(
             excel_file.getvalue(),
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        
-        # Set filename
         filename = f"{scenario_name.replace(' ', '_')}_projection.xlsx"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
         return response
         
     except Exception as e:
-        return Response(
-            {'error': f'Export failed: {str(e)}'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({'error': f'Export failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def export_scenario_to_excel(request, scenario_id):
     """Export saved scenario to Excel format"""
     try:
-        # Check if user has excel export feature
-        from payments.models import UserSubscription
-        
-        try:
-            subscription = UserSubscription.objects.get(user=request.user)
-            if not subscription.can_use_feature('excel_export'):
-                return Response(
-                    {'error': 'Excel export requires a paid subscription'}, 
-                    status=status.HTTP_403_FORBIDDEN
-                )
-        except UserSubscription.DoesNotExist:
-            return Response(
-                {'error': 'No subscription found'}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Get scenario
-        scenario = RetirementScenario.objects.get(id=scenario_id)
-        
-        # Check if user owns this scenario (if we implement user ownership)
-        # if scenario.user and scenario.user != request.user:
-        #     return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
-        
-        # Get results
+        scenario = RetirementScenario.objects.get(id=scenario_id, user=request.user)
         result = scenario.result
         projection_data = result.get_yearly_data()
         summary_stats = result.get_summary_stats()
         
-        # Create Excel file
         excel_file = create_excel_export(projection_data, summary_stats, scenario.name)
         
-        # Track usage
-        from payments.models import UsageEvent
-        UsageEvent.objects.create(
-            user=request.user,
-            event_type='excel_export',
-            metadata={
-                'scenario_id': scenario_id,
-                'scenario_name': scenario.name,
-                'years_exported': len(projection_data)
-            }
-        )
+        log_usage(request.user, 'excel_export', {
+            'scenario_id': scenario_id,
+            'scenario_name': scenario.name,
+        })
         
-        # Create response
         response = HttpResponse(
             excel_file.getvalue(),
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        
-        # Set filename
         filename = f"{scenario.name.replace(' ', '_')}_projection.xlsx"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
         return response
         
     except RetirementScenario.DoesNotExist:
         return Response({'error': 'Scenario not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        return Response(
-            {'error': f'Export failed: {str(e)}'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({'error': f'Export failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

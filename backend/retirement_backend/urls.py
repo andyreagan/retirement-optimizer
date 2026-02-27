@@ -24,7 +24,6 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("api.urls")),
     path("api/auth/", include("api.auth_urls")),
-    path("api/payments/", include("payments.urls")),
     path("accounts/", include("allauth.urls")),  # Google OAuth URLs
     path("", views.index, name="index"),
 ]

@@ -133,6 +133,30 @@ class CashFlowItem(models.Model):
     class Meta:
         ordering = ['start_age', 'type', 'name']
 
+class UsageEvent(models.Model):
+    """Track feature usage events (no limits enforced, just analytics)"""
+    EVENT_TYPES = [
+        ('projection_run', 'Projection Run'),
+        ('scenario_saved', 'Scenario Saved'),
+        ('monte_carlo_run', 'Monte Carlo Run'),
+        ('excel_export', 'Excel Export'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='usage_events')
+    event_type = models.CharField(max_length=50, choices=EVENT_TYPES)
+    metadata = models.TextField(default='{}')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def get_metadata(self):
+        return json.loads(self.metadata)
+    
+    def set_metadata(self, value):
+        self.metadata = json.dumps(value)
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.event_type} at {self.created_at}"
+
+
 class ProjectionResult(models.Model):
     """Model to store projection results"""
     scenario = models.OneToOneField(RetirementScenario, on_delete=models.CASCADE, related_name='result')

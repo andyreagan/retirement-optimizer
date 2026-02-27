@@ -253,21 +253,6 @@ def test_retirement_app_full_workflow(django_server):
             else:
                 print("❌ Monte Carlo tab not found")
             
-            # Step 6: Check subscription status
-            print("Step 6: Checking subscription status...")
-            
-            subscription_btn = page.locator("button:has-text('Subscription')")
-            if subscription_btn.is_visible():
-                subscription_btn.click()
-                time.sleep(2)
-                
-                # Look for subscription information
-                subscription_info = page.locator("text=Free")
-                if subscription_info.is_visible():
-                    print("✅ Free subscription is active")
-                else:
-                    print("❌ Subscription information not visible")
-            
             # Final screenshot
             page.screenshot(path="final_state.png")
             

@@ -226,4 +226,40 @@ class Migration(migrations.Migration):
                 "unique_together": {("scenario", "person")},
             },
         ),
+        migrations.CreateModel(
+            name="UsageEvent",
+            fields=[
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "event_type",
+                    models.CharField(
+                        choices=[
+                            ("projection_run", "Projection Run"),
+                            ("scenario_saved", "Scenario Saved"),
+                            ("monte_carlo_run", "Monte Carlo Run"),
+                            ("excel_export", "Excel Export"),
+                        ],
+                        max_length=50,
+                    ),
+                ),
+                ("metadata", models.TextField(default="{}")),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="usage_events",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+            ],
+        ),
     ]

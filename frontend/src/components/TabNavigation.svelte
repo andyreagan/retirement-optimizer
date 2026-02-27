@@ -1,35 +1,16 @@
 <script>
   import { scenarioStore, scenarioActions, scenarioUtils } from '../stores/scenarioStore.js';
 
-  $: ({ current, ui, userSubscription } = $scenarioStore);
+  $: ({ current, ui } = $scenarioStore);
 
   function setTab(view) {
     scenarioActions.setCurrentView(view);
   }
 
-  // Reactive statements for tab states
   $: resultsDisabled = !scenarioUtils.canShowResults(current);
   $: monteCarloDisabled = !scenarioUtils.canShowResults(current);
-  
-  // Debug logging
-  $: console.log('Tab states:', { 
-    current, 
-    hasResults: current?.results !== null,
-    resultsDisabled,
-    monteCarloDisabled
-  });
-
-  // Reactive tab titles
   $: resultsTitle = !resultsDisabled ? 'Results' : 'Results (Run projection first)';
-  $: monteCarloTitle = (() => {
-    if (monteCarloDisabled) {
-      return 'Monte Carlo (Run projection first)';
-    } else if (userSubscription && !scenarioUtils.canRunMonteCarlo(current, userSubscription)) {
-      return 'Monte Carlo (Subscription limit reached)';
-    } else {
-      return 'Monte Carlo';
-    }
-  })();
+  $: monteCarloTitle = !monteCarloDisabled ? 'Monte Carlo' : 'Monte Carlo (Run projection first)';
 </script>
 
 <div class="tab-navigation">

@@ -1,6 +1,4 @@
 <script>
-  import { scenarioUtils, scenarioActions } from '../stores/scenarioStore.js'
-  
   export let config = {
     num_simulations: 1000,
     stocks_mean_return: 0.07,
@@ -13,7 +11,6 @@
   
   export let isRunning = false
   export let onRunMonteCarlo = () => {}
-  export let userSubscription = null
   
   function formatPercent(value) {
     return (value * 100).toFixed(1) + '%'
@@ -29,29 +26,14 @@
 <div class="monte-carlo-config">
   <div class="header">
     <h3>Monte Carlo Simulation</h3>
-    {#if scenarioUtils.canRunMonteCarlo(null, userSubscription)}
-      <button 
-        class="run-btn" 
-        class:running={isRunning}
-        on:click={handleRunMonteCarlo}
-        disabled={isRunning}
-      >
-        {isRunning ? 'Running...' : 'Run Monte Carlo'}
-      </button>
-    {:else}
-      <div class="limit-reached">
-        <p class="limit-message">
-          {scenarioUtils.getUsageLimitMessage(userSubscription, 'monte_carlo')}
-        </p>
-        <button 
-          type="button" 
-          class="upgrade-btn" 
-          on:click={() => scenarioActions.setCurrentView('subscription')}
-        >
-          Upgrade Plan
-        </button>
-      </div>
-    {/if}
+    <button 
+      class="run-btn" 
+      class:running={isRunning}
+      on:click={handleRunMonteCarlo}
+      disabled={isRunning}
+    >
+      {isRunning ? 'Running...' : 'Run Monte Carlo'}
+    </button>
   </div>
   
   <div class="info-note">
@@ -237,32 +219,6 @@
   .run-btn.running {
     background: #ffc107;
     color: #333;
-  }
-  
-  .limit-reached {
-    text-align: center;
-  }
-  
-  .limit-message {
-    color: #dc3545;
-    margin-bottom: 10px;
-    font-size: 14px;
-    font-weight: 500;
-  }
-  
-  .upgrade-btn {
-    background: #28a745;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    font-size: 14px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background 0.3s ease;
-  }
-  
-  .upgrade-btn:hover {
-    background: #218838;
   }
   
   .info-note {

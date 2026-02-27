@@ -1,6 +1,4 @@
 <script>
-  import PricingTiers from './PricingTiers.svelte'
-  
   export let onShowAuth
 
   const features = [
@@ -10,7 +8,7 @@
     },
     {
       title: "Advanced Monte Carlo",
-      description: "Run 10,000+ market scenarios with sequence of returns risk analysis - critical for early retirees"
+      description: "Run 1,000+ market scenarios with sequence of returns risk analysis — critical for early retirees"
     },
     {
       title: "Tax Optimization Ladder",
@@ -21,27 +19,6 @@
       description: "Optimize across 401k, Roth IRA, HSA, and taxable accounts with proper asset location strategies"
     }
   ]
-
-  function handleSelectTier(tier, billingCycle) {
-    // For landing page, selecting a tier should trigger authentication
-    // Store the selected tier info for post-auth purchase
-    if (tier.pricing_type === 'pack') {
-      // Store pack purchase intent in localStorage for after authentication
-      localStorage.setItem('pendingPurchase', JSON.stringify({
-        tierName: tier.name,
-        tierType: 'pack',
-        billingCycle
-      }))
-    } else {
-      // Store subscription upgrade intent
-      localStorage.setItem('pendingPurchase', JSON.stringify({
-        tierName: tier.name,
-        tierType: 'subscription',
-        billingCycle
-      }))
-    }
-    onShowAuth()
-  }
 </script>
 
 <div class="landing-page">
@@ -55,10 +32,7 @@
       </p>
       <div class="hero-actions">
         <button class="cta-button" on:click={() => onShowAuth()}>
-          Get Started Free
-        </button>
-        <button class="demo-button" on:click={() => onShowAuth()}>
-          View Demo
+          Get Started — It's Free
         </button>
       </div>
     </div>
@@ -88,12 +62,6 @@
       {/each}
     </div>
   </div>
-
-  <PricingTiers 
-    onSelectTier={handleSelectTier}
-    currentTier="individual"
-    isAuthenticated={false}
-  />
 
   <div class="cta-section">
     <h2>Ready to Achieve Financial Independence?</h2>
@@ -154,23 +122,6 @@
   .cta-button:hover {
     background: #0056b3;
     transform: translateY(-2px);
-  }
-
-  .demo-button {
-    padding: 15px 30px;
-    background: transparent;
-    color: #007bff;
-    border: 2px solid #007bff;
-    border-radius: 8px;
-    font-size: 1.1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-  }
-
-  .demo-button:hover {
-    background: #007bff;
-    color: white;
   }
 
   .hero-visual {
@@ -260,8 +211,6 @@
     line-height: 1.6;
   }
 
-
-
   .cta-section {
     padding: 80px 0;
     text-align: center;
@@ -295,8 +244,7 @@
       align-items: center;
     }
 
-    .cta-button,
-    .demo-button {
+    .cta-button {
       width: 100%;
       max-width: 300px;
     }

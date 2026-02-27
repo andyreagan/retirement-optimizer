@@ -9,13 +9,11 @@
 
   let current;
   let ui;
-  let userSubscription;
   let loading = false;
 
   scenarioStore.subscribe(state => {
     current = state.current;
     ui = state.ui;
-    userSubscription = state.userSubscription;
   });
 
   function handleCashFlowChange(event) {
@@ -114,34 +112,10 @@
       const data = await response.json();
 
       if (!response.ok) {
-        if (response.status === 429) {
-          // Handle usage limit reached
-          if (data.usage_limits) {
-            // Update subscription data so UI can show upgrade button
-            scenarioActions.setUserSubscription({
-              ...userSubscription,
-              usage_limits: data.usage_limits
-            });
-          }
-          scenarioActions.setError(data.error || 'Usage limit reached. Please upgrade your plan.');
-        } else {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return;
-      }
-
-      console.log('Projection response data:', data);
-      
-      // Update subscription data with latest usage limits
-      if (data.usage_limits) {
-        scenarioActions.setUserSubscription({
-          ...userSubscription,
-          usage_limits: data.usage_limits
-        });
+        throw new Error(data.error || `HTTP error! status: ${response.status}`);
       }
       
       scenarioActions.setResults(data);
-      console.log('Results set, switching to results view');
       scenarioActions.setCurrentView('results');
     } catch (error) {
       scenarioActions.setError(error.message);
@@ -340,24 +314,9 @@
     </div>
     
     <div class="submit-section">
-      {#if scenarioUtils.canRunProjection(userSubscription)}
-        <button type="button" class="submit-btn" on:click={runProjection} disabled={loading}>
-          {loading ? 'Running Projection...' : 'Run Projection'}
-        </button>
-      {:else}
-        <div class="limit-reached">
-          <p class="limit-message">
-            {scenarioUtils.getUsageLimitMessage(userSubscription, 'projection_runs')}
-          </p>
-          <button 
-            type="button" 
-            class="upgrade-btn" 
-            on:click={() => window.location.href = '/subscription'}
-          >
-            Upgrade Plan
-          </button>
-        </div>
-      {/if}
+      <button type="button" class="submit-btn" on:click={runProjection} disabled={loading}>
+        {loading ? 'Running Projection...' : 'Run Projection'}
+      </button>
     </div>
   </div>
 </div>
@@ -459,31 +418,6 @@
   .submit-btn:disabled {
     background: #ccc;
     cursor: not-allowed;
-  }
-  
-  .limit-reached {
-    text-align: center;
-  }
-  
-  .limit-message {
-    color: #dc3545;
-    margin-bottom: 15px;
-    font-weight: 500;
-  }
-  
-  .upgrade-btn {
-    background: #28a745;
-    color: white;
-    border: none;
-    padding: 12px 30px;
-    font-size: 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background 0.3s ease;
-  }
-  
-  .upgrade-btn:hover {
-    background: #218838;
   }
   
   .submit-btn:hover:not(:disabled) {

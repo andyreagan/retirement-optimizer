@@ -3,7 +3,6 @@ djangorestframework
 django-cors-headers
 django-allauth
 python-dotenv
-stripe
 pandas
 numpy
 openpyxl

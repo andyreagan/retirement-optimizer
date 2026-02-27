@@ -3,19 +3,15 @@
   import { authStore } from './stores.js'
   import { onMount } from 'svelte'
   
-  // New components
   import ScenarioHeader from './components/ScenarioHeader.svelte'
   import TabNavigation from './components/TabNavigation.svelte'
   import ScenarioManager from './components/ScenarioManager.svelte'
   import ParametersTab from './components/ParametersTab.svelte'
-  
-  // Existing components
   import Results from './components/Results.svelte'
   import MonteCarloConfig from './components/MonteCarloConfig.svelte'
   import MonteCarloResults from './components/MonteCarloResults.svelte'
   import AuthManager from './components/AuthManager.svelte'
   import LandingPage from './components/LandingPage.svelte'
-  import SubscriptionManager from './components/SubscriptionManager.svelte'
   
   let monteCarloConfig = {
     num_simulations: 1000,
@@ -30,86 +26,26 @@
   let showAuth = false
   let authState = { isAuthenticated: false, user: null, loading: true }
   let showProfile = false
-  let scenario, ui, userSubscription
+  let scenario, ui
   
-  // Subscribe to stores
   authStore.subscribe(state => {
     authState = state
-    if (state.isAuthenticated) {
-      loadUserSubscription()
-      handlePendingPurchase()
-    }
   })
-
-  function handlePendingPurchase() {
-    // Check if there's a pending purchase from the landing page
-    const pendingPurchase = localStorage.getItem('pendingPurchase')
-    if (pendingPurchase) {
-      try {
-        const purchase = JSON.parse(pendingPurchase)
-        // Clear the pending purchase
-        localStorage.removeItem('pendingPurchase')
-        
-        // Navigate to subscription manager to complete the purchase
-        scenarioActions.setCurrentView('subscription')
-        
-        // Store the intended purchase for the SubscriptionManager to pick up
-        localStorage.setItem('intentedPurchase', pendingPurchase)
-      } catch (error) {
-        console.error('Error parsing pending purchase:', error)
-        localStorage.removeItem('pendingPurchase')
-      }
-    }
-  }
   
   scenarioStore.subscribe(state => {
     scenario = state.current
     ui = state.ui
-    userSubscription = state.userSubscription
   })
   
-  // Close profile dropdown when clicking outside
   onMount(() => {
     function handleClickOutside(event) {
       if (showProfile && !event.target.closest('.profile-dropdown')) {
         showProfile = false
       }
     }
-    
     document.addEventListener('click', handleClickOutside)
-    
-    return () => {
-      document.removeEventListener('click', handleClickOutside)
-    }
+    return () => document.removeEventListener('click', handleClickOutside)
   })
-  
-  async function loadUserSubscription() {
-    try {
-      const response = await fetch('/api/payments/subscription/', {
-        credentials: 'include'
-      })
-      if (response.ok) {
-        const subscription = await response.json()
-        scenarioActions.setUserSubscription(subscription)
-        console.log('User subscription loaded:', subscription)
-      }
-    } catch (error) {
-      console.error('Error loading subscription:', error)
-    }
-  }
-
-  // Helper function to update subscription data
-  function updateSubscriptionData(newData) {
-    if (newData.usage_limits) {
-      scenarioActions.setUserSubscription({
-        ...userSubscription,
-        usage_limits: newData.usage_limits,
-        projection_runs_used: newData.usage_limits.projection_runs.used,
-        scenarios_used: newData.usage_limits.scenarios.used,
-        monte_carlo_runs_used: newData.usage_limits.monte_carlo.used
-      });
-    }
-  }
 
   async function runMonteCarlo() {
     if (!scenario.results) {
@@ -126,10 +62,7 @@
         monte_carlo_config: monteCarloConfig
       }
       
-      // Get CSRF token first
-      const csrfResponse = await fetch('/api/auth/csrf/', {
-        credentials: 'include'
-      })
+      const csrfResponse = await fetch('/api/auth/csrf/', { credentials: 'include' })
       const csrfData = await csrfResponse.json()
       
       const response = await fetch('/api/monte-carlo/', {
@@ -145,28 +78,7 @@
       const data = await response.json()
       
       if (!response.ok) {
-        if (response.status === 429) {
-          // Handle usage limit reached
-          if (data.usage_limits) {
-            // Update subscription data so UI can show upgrade button
-            scenarioActions.setUserSubscription({
-              ...userSubscription,
-              usage_limits: data.usage_limits
-            });
-          }
-          scenarioActions.setError(data.error || 'Usage limit reached. Please upgrade your plan.');
-        } else {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-        return;
-      }
-      
-      // Update subscription data with latest usage limits
-      if (data.usage_limits) {
-        scenarioActions.setUserSubscription({
-          ...userSubscription,
-          usage_limits: data.usage_limits
-        });
+        throw new Error(data.error || `HTTP error! status: ${response.status}`)
       }
       
       scenarioActions.setMonteCarloResults(data)
@@ -180,35 +92,24 @@
   
   async function handleLogout() {
     try {
-      // Get CSRF token first
-      const csrfResponse = await fetch('/api/auth/csrf/', {
-        credentials: 'include'
-      })
+      const csrfResponse = await fetch('/api/auth/csrf/', { credentials: 'include' })
       const csrfData = await csrfResponse.json()
       
       const response = await fetch('/api/auth/logout/', {
         method: 'POST',
-        headers: {
-          'X-CSRFToken': csrfData.csrf_token
-        },
+        headers: { 'X-CSRFToken': csrfData.csrf_token },
         credentials: 'include'
       })
       
       if (response.ok) {
-        authStore.set({
-          isAuthenticated: false,
-          user: null,
-          loading: false
-        })
+        authStore.set({ isAuthenticated: false, user: null, loading: false })
       }
     } catch (error) {
       console.error('Logout error:', error)
     }
   }
 
-  function handleRefreshSavedScenarios() {
-    // This will be handled by the ScenarioManager component
-  }
+  function handleRefreshSavedScenarios() {}
 </script>
 
 <main>
@@ -220,38 +121,6 @@
       {:else if authState.isAuthenticated}
         <div class="user-info">
           <span>Welcome, {authState.user.display_name}!</span>
-          <div class="profile-dropdown">
-            <button class="profile-btn" on:click={() => showProfile = !showProfile}>
-              Profile ▼
-            </button>
-            {#if showProfile}
-              <div class="profile-menu">
-                <div class="profile-section">
-                  <h4>Subscription Plan</h4>
-                  {#if userSubscription}
-                    <p><strong>Plan:</strong> {userSubscription.tier?.display_name || 'Individual'}</p>
-                    <p><strong>Status:</strong> {userSubscription.status ? userSubscription.status.charAt(0).toUpperCase() + userSubscription.status.slice(1) : 'Active'}</p>
-                    {#if userSubscription.monthly_projections_limit}
-                      <p><strong>Monthly Projections:</strong> {userSubscription.monthly_projections_used || 0} / {userSubscription.monthly_projections_limit}</p>
-                    {/if}
-                    {#if userSubscription.monthly_monte_carlo_limit}
-                      <p><strong>Monthly Monte Carlo:</strong> {userSubscription.monthly_monte_carlo_used || 0} / {userSubscription.monthly_monte_carlo_limit}</p>
-                    {/if}
-                    {#if userSubscription.next_billing_date}
-                      <p><strong>Next Billing:</strong> {new Date(userSubscription.next_billing_date).toLocaleDateString()}</p>
-                    {/if}
-                  {:else}
-                    <p>Free Plan</p>
-                  {/if}
-                </div>
-                <div class="profile-actions">
-                  <button class="manage-subscription-btn" on:click={() => { scenarioActions.setCurrentView('subscription'); showProfile = false; }}>
-                    Manage Subscription
-                  </button>
-                </div>
-              </div>
-            {/if}
-          </div>
           <button class="logout-btn" on:click={handleLogout}>Logout</button>
         </div>
       {:else}
@@ -293,7 +162,6 @@
                 bind:config={monteCarloConfig} 
                 isRunning={ui.isLoading}
                 onRunMonteCarlo={runMonteCarlo}
-                userSubscription={userSubscription}
               />
               {#if scenario.monteCarloResults}
                 <MonteCarloResults results={scenario.monteCarloResults} />
@@ -308,8 +176,6 @@
               </button>
             </div>
           {/if}
-        {:else if ui.currentView === 'subscription'}
-          <SubscriptionManager />
         {/if}
       </div>
     </div>
@@ -366,87 +232,6 @@
   .user-info span {
     color: #333;
     font-weight: 500;
-  }
-  
-  .profile-dropdown {
-    position: relative;
-  }
-  
-  .profile-btn {
-    padding: 8px 12px;
-    border: 1px solid #dee2e6;
-    background: white;
-    color: #495057;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.3s ease;
-  }
-  
-  .profile-btn:hover {
-    background: #f8f9fa;
-    border-color: #adb5bd;
-  }
-  
-  .profile-menu {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    background: white;
-    border: 1px solid #dee2e6;
-    border-radius: 6px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    min-width: 280px;
-    z-index: 1000;
-    margin-top: 4px;
-  }
-  
-  .profile-section {
-    padding: 16px;
-  }
-  
-  .profile-section h4 {
-    margin: 0 0 12px 0;
-    color: #333;
-    font-size: 14px;
-    font-weight: 600;
-    border-bottom: 1px solid #e9ecef;
-    padding-bottom: 8px;
-  }
-  
-  .profile-section p {
-    margin: 8px 0;
-    font-size: 13px;
-    color: #666;
-    line-height: 1.4;
-  }
-  
-  .profile-section strong {
-    color: #333;
-  }
-  
-  .profile-actions {
-    padding: 12px 16px;
-    border-top: 1px solid #e9ecef;
-    background: #f8f9fa;
-  }
-  
-  .manage-subscription-btn {
-    width: 100%;
-    padding: 8px 16px;
-    border: 1px solid #007bff;
-    background: #007bff;
-    color: white;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 500;
-    transition: all 0.3s ease;
-  }
-  
-  .manage-subscription-btn:hover {
-    background: #0056b3;
-    border-color: #0056b3;
   }
   
   .login-btn, .logout-btn {
