@@ -39,7 +39,7 @@ A comprehensive retirement planning application with Monte Carlo simulation and 
 
 ### Prerequisites
 
-- Python 3.8+
+- [uv](https://docs.astral.sh/uv/) (Python package manager)
 - Node.js 16+ (for building frontend)
 - SQLite (included with Python)
 
@@ -49,9 +49,7 @@ A comprehensive retirement planning application with Monte Carlo simulation and 
 
 ```bash
 cd backend
-python -m venv ../.venv
-source ../.venv/bin/activate
-pip install -r requirements.txt
+uv sync
 ```
 
 2. **Configure environment**
@@ -64,8 +62,8 @@ cp .env.example .env
 3. **Run migrations and create superuser**
 
 ```bash
-python manage.py migrate
-python manage.py createsuperuser
+uv run python manage.py migrate
+uv run python manage.py createsuperuser
 ```
 
 4. **Build frontend and start server**
@@ -74,7 +72,7 @@ python manage.py createsuperuser
 cd ..
 ./build_frontend.sh
 cd backend
-python manage.py runserver
+uv run python manage.py runserver
 ```
 
 🎉 **The application is available at `http://localhost:8000`**
@@ -84,16 +82,61 @@ python manage.py runserver
 ```bash
 # Backend (Django)
 cd backend
-python manage.py test
+uv run python manage.py test
 
 # Backend (pytest — full suite)
 cd backend
-pytest tests/ -v
+uv run pytest tests/ -v
 
 # Frontend (Vitest)
 cd frontend
 npm run test:run
 ```
+
+## Docker Deployment
+
+### Build and run locally
+
+```bash
+docker build -t retirement-optimizer .
+docker run -d \
+  -p 8000:8000 \
+  -e SECRET_KEY=your-secret-key \
+  -e ALLOWED_HOSTS=localhost,127.0.0.1 \
+  -v retirement-data:/data \
+  retirement-optimizer
+```
+
+### Using Docker Compose
+
+```bash
+# Copy .env.example to .env and fill in values
+cp backend/.env.example .env
+
+docker compose up -d
+```
+
+The compose file mounts a named volume at `/data` for the SQLite database. Set these environment variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SECRET_KEY` | Yes | Django secret key |
+| `ALLOWED_HOSTS` | No | Comma-separated hostnames (default: `localhost,127.0.0.1`) |
+| `DATABASE_PATH` | No | SQLite path (default: `/data/db.sqlite3` in Docker) |
+| `GOOGLE_OAUTH2_CLIENT_ID` | No | Google OAuth client ID |
+| `GOOGLE_OAUTH2_CLIENT_SECRET` | No | Google OAuth client secret |
+| `FRONTEND_URL` | No | Public URL for OAuth redirects |
+
+### Synology NAS
+
+1. Push the image to a registry (or build on the NAS):
+   ```bash
+   docker build -t your-registry/retirement-optimizer .
+   docker push your-registry/retirement-optimizer
+   ```
+2. In Synology Container Manager, create a project using `docker-compose.yml`
+3. Set environment variables in the Synology UI or via a `.env` file
+4. Map a local folder to `/data` for persistent database storage
 
 ## API Endpoints
 

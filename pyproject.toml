@@ -1,0 +1,75 @@
+[project]
+name = "retirement-optimization"
+version = "0.1.0"
+description = "Retirement planning optimizer with Monte Carlo simulation"
+requires-python = ">=3.11"
+dependencies = [
+    "django>=5.2.4",
+    "djangorestframework",
+    "django-cors-headers",
+    "django-allauth",
+    "python-dotenv",
+    "pandas",
+    "numpy",
+    "openpyxl",
+    "PyJWT",
+    "cryptography",
+    "gunicorn>=22.0.0",
+    "whitenoise>=6.0.0",
+    "requests>=2.28.0",
+]
+
+[dependency-groups]
+test = [
+    "pytest>=7.0.0",
+    "pytest-django>=4.5.0",
+    "pytest-cov>=4.0.0",
+    "pytest-xdist>=3.0.0",
+    "pytest-timeout>=2.1.0",
+    "pytest-mock>=3.10.0",
+    "playwright>=1.40.0",
+    "pytest-playwright>=0.4.0",
+    "factory-boy>=3.2.0",
+    "faker>=20.0.0",
+    "freezegun>=1.2.0",
+    "coverage[toml]>=7.0.0",
+]
+
+[tool.pytest.ini_options]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+testpaths = ["tests"]
+addopts = "--verbose --strict-markers --tb=short --disable-warnings -p no:warnings"
+DJANGO_SETTINGS_MODULE = "retirement_backend.settings"
+pythonpath = ["backend"]
+markers = [
+    "unit: Unit tests (fast, isolated)",
+    "integration: Integration tests (database, API)",
+    "e2e: End-to-end tests (full stack)",
+    "slow: Slow running tests",
+    "skip_ci: Skip in CI environment",
+]
+
+[tool.coverage.run]
+source = ["backend"]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if settings.DEBUG:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
