@@ -1,7 +1,7 @@
 # Retirement Optimization Project - Test Suite
 # ============================================
 
-.PHONY: test test-backend test-frontend test-e2e
+.PHONY: test test-backend test-frontend test-e2e test-functional
 
 # Run all tests (backend + frontend + e2e)
 test: test-backend test-frontend test-e2e
@@ -20,3 +20,6 @@ test-frontend:
 test-e2e:
 	./build_frontend.sh
 	uv run --group test pytest functional_tests/ -v --timeout=120
+
+# Alias for CI (same as test-e2e)
+test-functional: test-e2e
