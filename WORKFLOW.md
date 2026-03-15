@@ -1,7 +1,7 @@
 Thoroughly research the issue in the codebase.
 
 This app is Svelte frontend and Django backend.
-Run the app by (1) compiling the frontend via ./build_frontend.sh and (2) cd backend && python manage.py migrate.
+Run the app by (1) compiling the frontend via ./build_frontend.sh and (2) cd backend && uv run python manage.py migrate.
 You can query the API, curl the frontend, or use playright to hit the front end directly.
 
 After making a change, both the front and backend tests must be run and updated if necessary.

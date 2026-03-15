@@ -1,26 +1,22 @@
 # Retirement Optimization Project - Test Suite
 # ============================================
 
-# Test directories
 .PHONY: test test-backend test-frontend test-functional
 
-# Run all tests
+# Run all tests (backend + frontend + functional)
 test: test-backend test-frontend test-functional
 	@echo "All tests completed!"
 
-# Backend tests
+# Backend unit/integration tests
 test-backend:
-	cd backend && pytest tests
-	cd backend && python manage.py test
+	cd backend && uv run --group test pytest tests/ -v
+	cd backend && uv run --group test python manage.py test
 
-# Frontend tests
+# Frontend unit tests
 test-frontend:
 	cd frontend && npm run test:run
 
-# Functional tests
+# Functional/E2E tests (starts its own server via subprocess)
 test-functional:
-	./build_frontend.sh 
-	cd backend && python manage.py runserver &
-	@sleep 3
-	pytest functional_tests
-	@pkill -f "manage.py runserver" || true
+	./build_frontend.sh
+	uv run --group test pytest functional_tests/ -v --timeout=120
