@@ -22,14 +22,15 @@ SERVER_PORT = 8765
 SERVER_URL = f"http://localhost:{SERVER_PORT}"
 
 
-def _wait_for_server(port, timeout=15):
-    """Wait until the server is accepting connections."""
+def _wait_for_server(port, timeout=30):
+    """Wait until the server is accepting connections and responding to requests."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             conn = HTTPConnection(f"localhost:{port}")
-            conn.request("HEAD", "/")
+            conn.request("GET", "/api/auth/csrf/")
             resp = conn.getresponse()
+            # Accept any HTTP response (200, 404, etc.) as proof the server is running
             if resp is not None:
                 conn.close()
                 return True
@@ -50,12 +51,20 @@ def server_url():
     test_db = BACKEND_DIR / "test_e2e.sqlite3"
     env["DATABASE_PATH"] = str(test_db)
 
-    subprocess.run(
+    migrate_result = subprocess.run(
         [sys.executable, "manage.py", "migrate", "--run-syncdb"],
         cwd=str(BACKEND_DIR),
         env=env,
         capture_output=True,
+        text=True,
     )
+
+    if migrate_result.returncode != 0:
+        raise RuntimeError(
+            f"Database migration failed:\n"
+            f"STDOUT: {migrate_result.stdout}\n"
+            f"STDERR: {migrate_result.stderr}"
+        )
 
     # Start the server with --noreload so it stays a single process
     proc = subprocess.Popen(
@@ -69,10 +78,23 @@ def server_url():
         cwd=str(BACKEND_DIR),
         env=env,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.STDOUT,  # Merge stderr into stdout for easier debugging
+        text=True,
+        bufsize=1,  # Line buffered
     )
 
     try:
+        # Give the server a moment to start before checking
+        time.sleep(2)
+
+        # Check if process died immediately
+        if proc.poll() is not None:
+            stdout, _ = proc.communicate()
+            raise RuntimeError(
+                f"Django server failed to start. Exit code: {proc.returncode}\n"
+                f"Output:\n{stdout}"
+            )
+
         _wait_for_server(SERVER_PORT)
         yield SERVER_URL
     finally:
