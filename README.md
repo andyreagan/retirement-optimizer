@@ -1,3 +1,5 @@
+> **Note:** this was a weekend vibe-code project that allowed me to see how far off the rails direction changes during development can leave a vibed-project. It was briefly hosted at retiresim.andyreagan.com; I took it down.
+>
 > **ARCHIVED (2026-09-10).** Superseded by the goals simulator in the private `finances` repo:
 > beancount ledger (ground truth) + goals.toml/accounts.toml DSL + a tested Monte Carlo
 > engine with historical sequence-risk returns, account-rule modeling, and mortality
