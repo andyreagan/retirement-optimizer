@@ -88,12 +88,23 @@ class ProjectionAPITests(TestCase):
         usage_events = UsageEvent.objects.filter(user=self.user, event_type='monte_carlo_run')
         self.assertEqual(usage_events.count(), 1)
     
-    def test_unauthenticated_access(self):
-        """Test that unauthenticated users cannot access endpoints"""
+    def test_anonymous_projection_access(self):
+        """Test that anonymous users can run projections but not save"""
         response = self.client.post('/api/projection/', self.projection_data, format='json')
-        self.assertIn(response.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn('scenario_id', response.data)
         
+        # No usage events for anonymous users
+        self.assertEqual(UsageEvent.objects.count(), 0)
+    
+    def test_anonymous_monte_carlo_access(self):
+        """Test that anonymous users can run Monte Carlo"""
         response = self.client.post('/api/monte-carlo/', self.monte_carlo_data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+    
+    def test_scenarios_require_auth(self):
+        """Test that saved scenarios endpoints require authentication"""
+        response = self.client.get('/api/scenarios/')
         self.assertIn(response.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
     
     def test_save_scenario(self):

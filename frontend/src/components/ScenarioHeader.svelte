@@ -4,6 +4,8 @@
 
   const dispatch = createEventDispatcher();
 
+  export let isAuthenticated = false;
+
   let scenario;
   let ui;
 
@@ -12,9 +14,22 @@
     ui = state.ui;
   });
 
-  async function saveScenario() {
+  function saveLocally() {
     if (!scenario.parameters.name?.trim()) {
       scenarioActions.setError('Please enter a scenario name');
+      return;
+    }
+    scenarioActions.saveToLocal();
+  }
+
+  async function saveToServer() {
+    if (!scenario.parameters.name?.trim()) {
+      scenarioActions.setError('Please enter a scenario name');
+      return;
+    }
+
+    if (!isAuthenticated) {
+      dispatch('showAuth');
       return;
     }
 
@@ -22,10 +37,7 @@
     scenarioActions.setError(null);
 
     try {
-      // Get CSRF token
-      const csrfResponse = await fetch('/api/auth/csrf/', {
-        credentials: 'include'
-      });
+      const csrfResponse = await fetch('/api/auth/csrf/', { credentials: 'include' });
       const csrfData = await csrfResponse.json();
 
       const saveData = {
@@ -47,13 +59,9 @@
         const result = await response.json();
         scenarioActions.markClean();
         scenarioActions.triggerScenarioRefresh();
-        dispatch('scenarioSaved', result);
-        // Refresh saved scenarios list
-        dispatch('refreshSavedScenarios');
       } else {
         const errorText = await response.text();
-        console.error('Save failed. Status:', response.status, 'Response:', errorText);
-        throw new Error(`Failed to save scenario: ${response.status} - ${errorText}`);
+        throw new Error(`Failed to save: ${response.status}`);
       }
     } catch (error) {
       scenarioActions.setError(error.message);
@@ -90,29 +98,46 @@
       {/if}
     </div>
     {#if scenario.id}
-      <span class="scenario-id">ID: {scenario.id}</span>
+      <span class="scenario-id">
+        {#if typeof scenario.id === 'string' && scenario.id.startsWith('local_')}
+          Saved locally
+        {:else}
+          ID: {scenario.id} (synced)
+        {/if}
+      </span>
     {/if}
   </div>
 
   <div class="scenario-actions">
     <button class="action-btn secondary" on:click={newScenario}>
-      New Scenario
+      New
     </button>
     
     <button 
       class="action-btn secondary" 
       on:click={() => scenarioActions.toggleScenarioManager()}
     >
-      Load Scenario
+      Load
     </button>
     
     <button 
       class="action-btn primary" 
-      on:click={saveScenario}
+      on:click={saveLocally}
       disabled={ui.isLoading || !scenario.parameters.name?.trim()}
     >
-{ui.isLoading ? 'Running & Saving...' : 'Run & Save Scenario'}
+      💾 Save
     </button>
+    
+    {#if isAuthenticated}
+      <button 
+        class="action-btn sync-btn" 
+        on:click={saveToServer}
+        disabled={ui.isLoading || !scenario.parameters.name?.trim()}
+        title="Run projection & sync to your account"
+      >
+        {ui.isLoading ? '⏳ Syncing...' : '☁️ Run & Sync'}
+      </button>
+    {/if}
   </div>
 </div>
 
@@ -183,7 +208,7 @@
 
   .scenario-actions {
     display: flex;
-    gap: 12px;
+    gap: 8px;
   }
 
   .action-btn {
@@ -223,6 +248,22 @@
     border-color: #adb5bd;
   }
 
+  .sync-btn {
+    background: #28a745;
+    color: white;
+    border-color: #28a745;
+  }
+
+  .sync-btn:hover:not(:disabled) {
+    background: #218838;
+    border-color: #218838;
+  }
+
+  .sync-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
   .error-message {
     padding: 12px 20px;
     background: #f8d7da;
@@ -241,6 +282,7 @@
 
     .scenario-actions {
       justify-content: center;
+      flex-wrap: wrap;
     }
 
     .scenario-name-input {

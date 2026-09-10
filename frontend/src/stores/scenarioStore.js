@@ -1,11 +1,14 @@
 import { writable } from 'svelte/store';
 
+const LOCAL_STORAGE_KEY = 'firesim_scenarios';
+const LOCAL_STORAGE_CURRENT_KEY = 'firesim_current_scenario';
+
 // Default scenario parameters
 const defaultParameters = {
   name: 'New Scenario',
   start_year: new Date().getFullYear(),
   filing_status: 'single',
-  growth_rate: 0.03, // 3% real return (inflation-adjusted)
+  growth_rate: 0.03,
   people: [],
   cash_flow_items: [],
   accounts: [
@@ -44,19 +47,66 @@ const defaultParameters = {
   withdrawal_options: {}
 };
 
+// --- localStorage helpers ---
+
+function loadSavedScenariosFromStorage() {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveScenariosToStorage(scenarios) {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(scenarios));
+  } catch (e) {
+    console.warn('Failed to save scenarios to localStorage:', e);
+  }
+}
+
+function loadCurrentFromStorage() {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_CURRENT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCurrentToStorage(current) {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_CURRENT_KEY, JSON.stringify(current));
+  } catch (e) {
+    console.warn('Failed to save current scenario to localStorage:', e);
+  }
+}
+
+function generateLocalId() {
+  return 'local_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+// Load initial state from localStorage
+const savedFromStorage = loadSavedScenariosFromStorage();
+const currentFromStorage = loadCurrentFromStorage();
+
+const initialCurrent = currentFromStorage || {
+  id: null,
+  parameters: { ...defaultParameters },
+  results: null,
+  monteCarloResults: null,
+  lastRun: null,
+  isDirty: false,
+  isLocal: true // track whether saved locally vs server
+};
+
 // Initial store state
 const initialState = {
-  current: {
-    id: null,
-    parameters: { ...defaultParameters },
-    results: null,
-    monteCarloResults: null,
-    lastRun: null,
-    isDirty: false
-  },
-  saved: [],
+  current: initialCurrent,
+  saved: savedFromStorage,
   ui: {
-    currentView: 'parameters', // 'parameters' | 'results' | 'monte-carlo'
+    currentView: 'parameters',
     isLoading: false,
     error: null,
     showScenarioManager: false,
@@ -65,6 +115,11 @@ const initialState = {
 };
 
 export const scenarioStore = writable(initialState);
+
+// Auto-persist current scenario to localStorage on every change
+scenarioStore.subscribe(state => {
+  saveCurrentToStorage(state.current);
+});
 
 // Store actions
 export const scenarioActions = {
@@ -119,7 +174,8 @@ export const scenarioActions = {
         results: null,
         monteCarloResults: null,
         lastRun: null,
-        isDirty: false
+        isDirty: false,
+        isLocal: true
       },
       ui: { ...state.ui, currentView: 'parameters' }
     }));
@@ -158,7 +214,68 @@ export const scenarioActions = {
     }));
   },
 
+  // Save current scenario to localStorage
+  saveToLocal: () => {
+    scenarioStore.update(state => {
+      const current = state.current;
+      const localId = current.id || generateLocalId();
+      
+      const scenarioToSave = {
+        id: localId,
+        name: current.parameters.name || 'Untitled Scenario',
+        parameters: { ...current.parameters },
+        results: current.results,
+        monteCarloResults: current.monteCarloResults,
+        lastRun: current.lastRun,
+        savedAt: new Date().toISOString(),
+        isLocal: true
+      };
+
+      // Upsert into saved array
+      const existingIndex = state.saved.findIndex(s => s.id === localId);
+      let newSaved;
+      if (existingIndex >= 0) {
+        newSaved = [...state.saved];
+        newSaved[existingIndex] = scenarioToSave;
+      } else {
+        newSaved = [...state.saved, scenarioToSave];
+      }
+
+      saveScenariosToStorage(newSaved);
+
+      return {
+        ...state,
+        current: {
+          ...current,
+          id: localId,
+          isDirty: false,
+          isLocal: true
+        },
+        saved: newSaved
+      };
+    });
+  },
+
   loadScenario: (scenario) => {
+    // Handle locally-saved scenarios
+    if (scenario.isLocal || (typeof scenario.id === 'string' && scenario.id.startsWith('local_'))) {
+      scenarioStore.update(state => ({
+        ...state,
+        current: {
+          id: scenario.id,
+          parameters: scenario.parameters || { ...defaultParameters },
+          results: scenario.results || null,
+          monteCarloResults: scenario.monteCarloResults || null,
+          lastRun: scenario.lastRun || scenario.savedAt || null,
+          isDirty: false,
+          isLocal: true
+        },
+        ui: { ...state.ui, currentView: scenario.results ? 'results' : 'parameters', showScenarioManager: false }
+      }));
+      return;
+    }
+
+    // Handle server-loaded scenarios (same as before)
     const parameters = scenario.request_data || scenario.parameters || {};
     
     const safeParameters = {
@@ -211,7 +328,8 @@ export const scenarioActions = {
         },
         monteCarloResults: null,
         lastRun: scenario.created_at || new Date().toISOString(),
-        isDirty: false
+        isDirty: false,
+        isLocal: false
       },
       ui: { ...state.ui, currentView: 'results', showScenarioManager: false }
     }));
@@ -236,10 +354,20 @@ export const scenarioActions = {
   },
 
   removeSavedScenario: (scenarioId) => {
-    scenarioStore.update(state => ({
-      ...state,
-      saved: state.saved.filter(s => s.id !== scenarioId)
-    }));
+    scenarioStore.update(state => {
+      const newSaved = state.saved.filter(s => s.id !== scenarioId);
+      saveScenariosToStorage(newSaved);
+      return { ...state, saved: newSaved };
+    });
+  },
+
+  // Merge server scenarios with local ones (used after login)
+  mergeServerScenarios: (serverScenarios) => {
+    scenarioStore.update(state => {
+      const localScenarios = state.saved.filter(s => s.isLocal);
+      const merged = [...localScenarios, ...serverScenarios.map(s => ({ ...s, isLocal: false }))];
+      return { ...state, saved: merged };
+    });
   }
 };
 

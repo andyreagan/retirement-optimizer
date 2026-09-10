@@ -8,3 +8,7 @@ numpy
 openpyxl
 PyJWT
 cryptography
+requests
+whitenoise
+gunicorn
+psycopg2-binary

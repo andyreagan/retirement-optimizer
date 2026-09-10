@@ -1,103 +1,98 @@
 <script>
   import { scenarioStore, scenarioActions } from '../stores/scenarioStore.js';
 
+  export let isAuthenticated = false;
+
   let ui;
   let saved;
   let loading = false;
-  let hasLoadedScenarios = false;
+  let hasLoadedServerScenarios = false;
 
   scenarioStore.subscribe(state => {
     ui = state.ui;
     saved = state.saved;
   });
 
-  // Load scenarios when the manager opens (or reset the flag when closed)
-  $: if (ui.showScenarioManager && !loading && !hasLoadedScenarios) {
-    loadSavedScenarios();
+  // Load server scenarios when manager opens (if authenticated)
+  $: if (ui.showScenarioManager && isAuthenticated && !loading && !hasLoadedServerScenarios) {
+    loadServerScenarios();
   } else if (!ui.showScenarioManager) {
-    // Reset flag when manager closes so it refreshes on next open
-    hasLoadedScenarios = false;
+    hasLoadedServerScenarios = false;
   }
 
-  // Respond to refresh trigger
   $: if (ui.shouldRefreshScenarios && !loading) {
-    loadSavedScenarios();
+    if (isAuthenticated) loadServerScenarios();
     scenarioActions.clearRefreshFlag();
   }
 
-  async function loadSavedScenarios() {
-    if (loading) return; // Prevent concurrent requests
-    
+  async function loadServerScenarios() {
+    if (loading) return;
     loading = true;
-    hasLoadedScenarios = true;
+    hasLoadedServerScenarios = true;
     try {
-      console.log('Loading saved scenarios...');
-      const response = await fetch('/api/scenarios/', {
-        credentials: 'include'
-      });
-      console.log('Scenarios API response status:', response.status);
+      const response = await fetch('/api/scenarios/', { credentials: 'include' });
       if (response.ok) {
-        const scenarios = await response.json();
-        console.log('Loaded scenarios:', scenarios);
-        scenarioActions.setSavedScenarios(scenarios);
-      } else {
-        const errorText = await response.text();
-        console.error('Failed to load scenarios. Status:', response.status, 'Response:', errorText);
+        const serverScenarios = await response.json();
+        scenarioActions.mergeServerScenarios(serverScenarios);
       }
     } catch (error) {
-      console.error('Error loading scenarios:', error);
+      console.error('Error loading server scenarios:', error);
     } finally {
       loading = false;
     }
   }
 
-  async function loadScenario(scenarioId) {
+  function loadLocalScenario(scenario) {
+    scenarioActions.loadScenario(scenario);
+  }
+
+  async function loadServerScenario(scenarioId) {
     try {
-      const response = await fetch(`/api/scenarios/${scenarioId}/results/`, {
-        credentials: 'include'
-      });
+      const response = await fetch(`/api/scenarios/${scenarioId}/results/`, { credentials: 'include' });
       if (response.ok) {
         const scenarioData = await response.json();
         scenarioActions.loadScenario(scenarioData);
-        // Modal closes automatically via store action (showScenarioManager: false)
-      } else {
-        console.error('Failed to load scenario, status:', response.status);
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
       }
     } catch (error) {
       console.error('Error loading scenario:', error);
     }
   }
 
-  async function deleteScenario(scenarioId, scenarioName) {
-    if (!confirm(`Are you sure you want to delete "${scenarioName}"?`)) {
-      return;
+  function handleLoad(scenario) {
+    if (scenario.isLocal) {
+      loadLocalScenario(scenario);
+    } else {
+      loadServerScenario(scenario.id);
     }
+  }
 
-    try {
-      const csrfResponse = await fetch('/api/auth/csrf/', {
-        credentials: 'include'
-      });
-      const csrfData = await csrfResponse.json();
+  async function deleteScenario(scenario) {
+    if (!confirm(`Delete "${scenario.name}"?`)) return;
 
-      const response = await fetch(`/api/scenarios/${scenarioId}/`, {
-        method: 'DELETE',
-        headers: {
-          'X-CSRFToken': csrfData.csrf_token
-        },
-        credentials: 'include'
-      });
+    if (scenario.isLocal) {
+      scenarioActions.removeSavedScenario(scenario.id);
+    } else if (isAuthenticated) {
+      try {
+        const csrfResponse = await fetch('/api/auth/csrf/', { credentials: 'include' });
+        const csrfData = await csrfResponse.json();
 
-      if (response.ok) {
-        scenarioActions.removeSavedScenario(scenarioId);
+        const response = await fetch(`/api/scenarios/${scenario.id}/`, {
+          method: 'DELETE',
+          headers: { 'X-CSRFToken': csrfData.csrf_token },
+          credentials: 'include'
+        });
+
+        if (response.ok) {
+          scenarioActions.removeSavedScenario(scenario.id);
+        }
+      } catch (error) {
+        console.error('Error deleting scenario:', error);
       }
-    } catch (error) {
-      console.error('Error deleting scenario:', error);
     }
   }
 
   function formatDate(dateString) {
+    if (!dateString) return 'Unknown';
     return new Date(dateString).toLocaleDateString();
   }
 
@@ -106,9 +101,11 @@
   }
 
   function handleContentClick(event) {
-    // Prevent closing when clicking inside the modal
     event.stopPropagation();
   }
+
+  $: localScenarios = (saved || []).filter(s => s.isLocal);
+  $: serverScenarios = (saved || []).filter(s => !s.isLocal);
 </script>
 
 {#if ui.showScenarioManager}
@@ -124,47 +121,64 @@
       </div>
 
       <div class="modal-body">
-        {#if loading}
-          <div class="loading">Loading scenarios...</div>
-        {:else if saved.length === 0}
-          <div class="empty-state">
-            <p>No saved scenarios yet.</p>
-            <p>Create and save a scenario to see it here.</p>
-          </div>
-        {:else}
+        {#if localScenarios.length > 0}
+          <div class="section-label">💾 Saved Locally</div>
           <div class="scenarios-grid">
-            {#each saved as scenario}
+            {#each localScenarios as scenario}
               <div class="scenario-card">
                 <div class="scenario-header">
                   <h3 class="scenario-name">{scenario.name}</h3>
                   <div class="scenario-actions">
-                    <button 
-                      class="action-btn load-btn"
-                      on:click={() => loadScenario(scenario.id)}
-                    >
-                      Load
-                    </button>
-                    <button 
-                      class="action-btn delete-btn"
-                      on:click={() => deleteScenario(scenario.id, scenario.name)}
-                    >
-                      Delete
-                    </button>
+                    <button class="action-btn load-btn" on:click={() => handleLoad(scenario)}>Load</button>
+                    <button class="action-btn delete-btn" on:click={() => deleteScenario(scenario)}>Delete</button>
                   </div>
                 </div>
-                
+                <div class="scenario-info">
+                  <div class="info-item">
+                    <span class="label">Saved:</span>
+                    <span class="value">{formatDate(scenario.savedAt)}</span>
+                  </div>
+                  {#if scenario.parameters}
+                    <div class="info-item">
+                      <span class="label">Filing:</span>
+                      <span class="value">{scenario.parameters.filing_status || 'single'}</span>
+                    </div>
+                    <div class="info-item">
+                      <span class="label">Accounts:</span>
+                      <span class="value">{scenario.parameters.accounts?.length || 0}</span>
+                    </div>
+                  {/if}
+                  {#if scenario.results}
+                    <div class="info-item has-results">
+                      <span class="value">✓ Has results</span>
+                    </div>
+                  {/if}
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+
+        {#if isAuthenticated && serverScenarios.length > 0}
+          <div class="section-label">☁️ Synced to Account</div>
+          <div class="scenarios-grid">
+            {#each serverScenarios as scenario}
+              <div class="scenario-card server-card">
+                <div class="scenario-header">
+                  <h3 class="scenario-name">{scenario.name}</h3>
+                  <div class="scenario-actions">
+                    <button class="action-btn load-btn" on:click={() => handleLoad(scenario)}>Load</button>
+                    <button class="action-btn delete-btn" on:click={() => deleteScenario(scenario)}>Delete</button>
+                  </div>
+                </div>
                 <div class="scenario-info">
                   <div class="info-item">
                     <span class="label">ID:</span>
                     <span class="value">{scenario.id}</span>
                   </div>
                   <div class="info-item">
-                    <span class="label">Filing Status:</span>
-                    <span class="value">{scenario.filing_status}</span>
-                  </div>
-                  <div class="info-item">
-                    <span class="label">People:</span>
-                    <span class="value">{scenario.people?.length || 0}</span>
+                    <span class="label">Filing:</span>
+                    <span class="value">{scenario.filing_status || 'single'}</span>
                   </div>
                   <div class="info-item">
                     <span class="label">Accounts:</span>
@@ -175,15 +189,22 @@
             {/each}
           </div>
         {/if}
+
+        {#if loading}
+          <div class="loading">Loading scenarios...</div>
+        {:else if localScenarios.length === 0 && serverScenarios.length === 0}
+          <div class="empty-state">
+            <p>No saved scenarios yet.</p>
+            <p>Run a projection and save it to see it here.</p>
+          </div>
+        {/if}
       </div>
 
       <div class="modal-footer">
-        <button class="action-btn secondary" on:click={loadSavedScenarios}>
-          Refresh
-        </button>
-        <button class="action-btn primary" on:click={closeManager}>
-          Close
-        </button>
+        {#if isAuthenticated}
+          <button class="action-btn secondary" on:click={loadServerScenarios}>Refresh</button>
+        {/if}
+        <button class="action-btn primary" on:click={closeManager}>Close</button>
       </div>
     </div>
   </div>
@@ -253,6 +274,16 @@
     overflow-y: auto;
   }
 
+  .section-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 12px;
+    margin-top: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
   .loading {
     text-align: center;
     padding: 40px;
@@ -269,6 +300,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 16px;
+    margin-bottom: 20px;
   }
 
   .scenario-card {
@@ -276,6 +308,11 @@
     border-radius: 8px;
     padding: 16px;
     background: #f8f9fa;
+  }
+
+  .server-card {
+    border-color: #b8daff;
+    background: #f0f7ff;
   }
 
   .scenario-header {
@@ -309,6 +346,11 @@
     display: flex;
     justify-content: space-between;
     font-size: 12px;
+  }
+
+  .has-results .value {
+    color: #28a745;
+    font-weight: 500;
   }
 
   .label {

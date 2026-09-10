@@ -1,0 +1,58 @@
+services:
+
+  db:
+    image: postgres:16-alpine
+    container_name: retiresim-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${DB_NAME:-retiresim}
+      POSTGRES_USER:     ${DB_USER:-retiresim}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ${POSTGRES_DATA_PATH:-./data/postgres}:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-retiresim}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    container_name: retiresim-web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SECRET_KEY:        ${SECRET_KEY}
+      DEBUG:             ${DEBUG:-false}
+      ALLOWED_HOSTS:     ${ALLOWED_HOSTS:-retiresim.andyreagan.com localhost}
+      DB_ENGINE:         postgresql
+      DB_NAME:           ${DB_NAME:-retiresim}
+      DB_USER:           ${DB_USER:-retiresim}
+      DB_PASSWORD:       ${DB_PASSWORD}
+      DB_HOST:           db
+      DB_PORT:           5432
+      GOOGLE_OAUTH2_CLIENT_ID:     ${GOOGLE_OAUTH2_CLIENT_ID:-}
+      GOOGLE_OAUTH2_CLIENT_SECRET: ${GOOGLE_OAUTH2_CLIENT_SECRET:-}
+      FRONTEND_URL:      ${FRONTEND_URL:-https://retiresim.andyreagan.com}
+    networks:
+      - internal
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: retiresim-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    networks:
+      - internal
+    depends_on:
+      - web
+
+networks:
+  internal:
+    driver: bridge

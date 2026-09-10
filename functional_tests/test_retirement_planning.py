@@ -1,155 +1,147 @@
 """
-E2E Tests for Retirement Planning Workflow
+E2E Tests for core retirement planning workflows — anonymous user.
 """
 import pytest
 from playwright.sync_api import expect
-import json
 
 
-@pytest.mark.skip(reason="UI elements need to be updated for current interface")
-class TestRetirementPlanningFlow:
-    """Test complete retirement planning workflows"""
-    
+class TestAnonymousProjection:
+    """Test that an anonymous user can run a projection without signing in."""
+
     @pytest.mark.e2e
-    def test_create_basic_scenario(self, authenticated_page, test_scenario_data):
-        """Test creating a basic retirement scenario"""
-        page = authenticated_page
-        
-        # Fill in basic information
-        page.fill('input[name="start_age"]', str(test_scenario_data['start_age']))
-        page.fill('input[name="death_age"]', str(test_scenario_data['death_age']))
-        page.select_option('select[name="filing_status"]', test_scenario_data['filing_status'])
-        
-        # Add account information
-        # Click "Add Account" button
-        page.click('button:has-text("Add Account")')
-        
-        # Fill in 401k details
-        page.select_option('select[name="account_type"]', '401k')
-        page.fill('input[name="initial_balance"]', '50000')
-        
-        # Set income and expenses
-        page.fill('input[name="annual_income"]', '100000')
-        page.fill('input[name="annual_expenses"]', '70000')
-        
-        # Run projection
-        page.click('button:has-text("Run Projection")')
-        
-        # Wait for results
-        results_section = page.locator('.results-section')
-        expect(results_section).to_be_visible(timeout=10000)
-        
-        # Verify results are displayed
-        expect(page.locator('text=Final Balance')).to_be_visible()
-        expect(page.locator('.chart-container')).to_be_visible()
-    
+    def test_run_projection_default_params(self, page, django_server):
+        """Run a projection with the defaults and verify results appear."""
+        page.goto(django_server)
+        page.wait_for_load_state("networkidle")
+
+        # Should be on Parameters tab by default
+        expect(page.locator("button.tab-btn.active:has-text('Parameters')")).to_be_visible()
+
+        # Click Run Projection
+        page.click("button:has-text('Run Projection')")
+
+        # Wait for results (tab switches automatically)
+        page.wait_for_timeout(5000)
+
+        # Results tab should now be active
+        expect(page.locator("button.tab-btn.active:has-text('Results')")).to_be_visible()
+
     @pytest.mark.e2e
-    def test_save_and_load_scenario(self, authenticated_page, test_scenario_data):
-        """Test saving and loading scenarios"""
-        page = authenticated_page
-        
-        # First create a scenario (abbreviated)
-        page.fill('input[name="start_age"]', '35')
-        page.click('button:has-text("Run Projection")')
-        
-        # Wait for results
-        page.wait_for_selector('.results-section')
-        
-        # Save scenario
-        page.fill('input[name="scenario_name"]', 'E2E Test Scenario')
-        page.click('button:has-text("Save Scenario")')
-        
-        # Wait for save confirmation
-        expect(page.locator('text=Scenario saved')).to_be_visible()
-        
-        # Navigate to saved scenarios
-        page.click('text=My Scenarios')
-        
-        # Verify scenario appears in list
-        expect(page.locator('text=E2E Test Scenario')).to_be_visible()
-        
-        # Load the scenario
-        page.click('text=E2E Test Scenario')
-        
-        # Verify data is loaded
-        age_input = page.locator('input[name="start_age"]')
-        expect(age_input).to_have_value('35')
-    
+    def test_results_contain_chart_or_data(self, page, django_server):
+        """After running a projection, the results area has content."""
+        page.goto(django_server)
+        page.wait_for_load_state("networkidle")
+
+        page.click("button:has-text('Run Projection')")
+        page.wait_for_timeout(5000)
+
+        # The content area should have something in it (chart canvas or summary)
+        content = page.locator(".content-area")
+        expect(content).not_to_be_empty()
+
     @pytest.mark.e2e
-    def test_monte_carlo_simulation(self, authenticated_page):
-        """Test running Monte Carlo simulation"""
-        page = authenticated_page
-        
-        # Create basic scenario first
-        page.fill('input[name="start_age"]', '35')
-        page.fill('input[name="annual_income"]', '100000')
-        page.click('button:has-text("Run Projection")')
-        
-        # Wait for results
-        page.wait_for_selector('.results-section')
-        
-        # Click Monte Carlo tab/button
-        page.click('text=Monte Carlo')
-        
-        # Configure simulation
-        page.fill('input[name="num_simulations"]', '100')
-        
-        # Run simulation
-        page.click('button:has-text("Run Monte Carlo")')
-        
-        # Wait for results (may take longer)
-        monte_carlo_results = page.locator('.monte-carlo-results')
-        expect(monte_carlo_results).to_be_visible(timeout=30000)
-        
-        # Verify success probability is shown
-        expect(page.locator('text=Success Probability')).to_be_visible()
-    
+    def test_error_shown_on_invalid_params(self, page, django_server):
+        """If the scenario name is cleared, saving should show an error."""
+        page.goto(django_server)
+        page.wait_for_load_state("networkidle")
+
+        # Clear the scenario name
+        name_input = page.locator(".scenario-name-input")
+        name_input.fill("")
+
+        # Try to save — the button should be disabled
+        save_btn = page.locator("button:has-text('Save')")
+        expect(save_btn).to_be_disabled()
+
+
+class TestLocalSave:
+    """Test local save / load workflow."""
+
     @pytest.mark.e2e
-    def test_usage_limits_individual_tier(self, authenticated_page):
-        """Test that individual tier usage limits are enforced"""
-        page = authenticated_page
-        
-        # Run projections up to the limit
-        for i in range(3):  # Individual tier limit
-            page.fill('input[name="start_age"]', str(30 + i))
-            page.click('button:has-text("Run Projection")')
-            page.wait_for_selector('.results-section')
-            
-            # Save each scenario
-            page.fill('input[name="scenario_name"]', f'Test Scenario {i+1}')
-            page.click('button:has-text("Save Scenario")')
-            page.wait_for_selector('text=Scenario saved')
-        
-        # Try to save one more (should hit limit)
-        page.fill('input[name="start_age"]', '40')
-        page.click('button:has-text("Run Projection")')
-        page.wait_for_selector('.results-section')
-        
-        page.fill('input[name="scenario_name"]', 'Over Limit')
-        page.click('button:has-text("Save Scenario")')
-        
-        # Should see limit error
-        expect(page.locator('text=scenario limit')).to_be_visible()
-    
+    def test_save_and_load_scenario_locally(self, page, django_server):
+        """Save a scenario locally, open the load modal, and see it listed."""
+        page.goto(django_server)
+        page.wait_for_load_state("networkidle")
+
+        # Give the scenario a unique name
+        name_input = page.locator(".scenario-name-input")
+        name_input.fill("")
+        name_input.fill("My Local Test")
+
+        # Click Save (local)
+        page.click("button:has-text('Save')")
+        page.wait_for_timeout(500)
+
+        # Open the Load modal
+        page.click("button:has-text('Load')")
+        page.wait_for_selector(".modal-content", timeout=3000)
+
+        # The scenario we just saved should appear
+        expect(page.locator("text=My Local Test")).to_be_visible()
+
+        # Close the modal
+        page.click("button:has-text('Close')")
+
     @pytest.mark.e2e
-    def test_responsive_design(self, browser, django_server):
-        """Test that the app works on mobile viewport"""
-        # Create mobile context
-        context = browser.new_context(
-            viewport={'width': 375, 'height': 667},  # iPhone SE size
-            user_agent='Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15'
-        )
-        page = context.new_page()
-        
-        # Navigate to app
-        page.goto('http://localhost:8000')
-        
-        # Verify mobile menu is visible
-        mobile_menu = page.locator('.mobile-menu-toggle')
-        expect(mobile_menu).to_be_visible()
-        
-        # Test navigation works
-        page.click('.mobile-menu-toggle')
-        expect(page.locator('.mobile-nav')).to_be_visible()
-        
-        context.close()
+    def test_delete_local_scenario(self, page, django_server):
+        """Save a scenario, then delete it from the load modal."""
+        page.goto(django_server)
+        page.wait_for_load_state("networkidle")
+
+        name_input = page.locator(".scenario-name-input")
+        name_input.fill("")
+        name_input.fill("Delete Me")
+
+        page.click("button:has-text('Save')")
+        page.wait_for_timeout(500)
+
+        # Open Load modal
+        page.click("button:has-text('Load')")
+        page.wait_for_selector(".modal-content", timeout=3000)
+
+        expect(page.locator("text=Delete Me")).to_be_visible()
+
+        # Accept the confirm dialog
+        page.on("dialog", lambda d: d.accept())
+
+        # Click the Delete button next to it
+        card = page.locator(".scenario-card:has-text('Delete Me')")
+        card.locator("button:has-text('Delete')").click()
+        page.wait_for_timeout(500)
+
+        # It should be gone
+        expect(page.locator(".scenario-card:has-text('Delete Me')")).not_to_be_visible()
+
+
+class TestTabNavigation:
+    """Test that tab switching works correctly."""
+
+    @pytest.mark.e2e
+    def test_results_tab_disabled_before_run(self, page, django_server):
+        """Results tab should be disabled when there are no results."""
+        page.goto(django_server)
+        page.wait_for_load_state("networkidle")
+
+        results_tab = page.locator("button.tab-btn:has-text('Results')")
+        expect(results_tab).to_be_disabled()
+
+    @pytest.mark.e2e
+    def test_monte_carlo_tab_disabled_before_run(self, page, django_server):
+        """Monte Carlo tab should be disabled when there are no results."""
+        page.goto(django_server)
+        page.wait_for_load_state("networkidle")
+
+        mc_tab = page.locator("button.tab-btn:has-text('Monte Carlo')")
+        expect(mc_tab).to_be_disabled()
+
+    @pytest.mark.e2e
+    def test_tabs_enabled_after_projection(self, page, django_server):
+        """After running a projection, all tabs should be enabled."""
+        page.goto(django_server)
+        page.wait_for_load_state("networkidle")
+
+        page.click("button:has-text('Run Projection')")
+        page.wait_for_timeout(5000)
+
+        expect(page.locator("button.tab-btn:has-text('Results')")).not_to_be_disabled()
+        expect(page.locator("button.tab-btn:has-text('Monte Carlo')")).not_to_be_disabled()

@@ -1,116 +1,172 @@
 <script>
-  import { onMount } from 'svelte'
   import { authStore } from '../stores.js'
+  import { scenarioActions } from '../stores/scenarioStore.js'
   
   export let showAuth = false
+  export let mode = 'login' // 'login' or 'register'
   
-  // No longer need login/register forms - only Google OAuth
+  let email = ''
+  let password = ''
+  let passwordConfirm = ''
   let loading = false
   let error = null
   
-  onMount(() => {
-    checkAuthStatus()
-  })
-  
-  async function checkAuthStatus() {
-    try {
-      const response = await fetch('/api/auth/user/', {
-        credentials: 'include'
-      })
-      
-      if (response.ok) {
-        const user = await response.json()
-        authStore.set({
-          isAuthenticated: true,
-          user: user,
-          loading: false
-        })
-      } else {
-        authStore.set({
-          isAuthenticated: false,
-          user: null,
-          loading: false
-        })
-      }
-    } catch (error) {
-      authStore.set({
-        isAuthenticated: false,
-        user: null,
-        loading: false
-      })
-    }
+  function resetForm() {
+    email = ''
+    password = ''
+    passwordConfirm = ''
+    error = null
   }
   
-  // Email/password authentication removed - only Google OAuth supported
-  
-  async function googleLogin() {
-    try {
-      // Redirect to Google OAuth
-      window.location.href = '/accounts/google/login/'
-    } catch (error) {
-      console.error('Google login error:', error)
-      error = 'Google login failed. Please try again.'
-    }
+  function close() {
+    showAuth = false
+    resetForm()
   }
-
-  async function logout() {
+  
+  function switchMode() {
+    mode = mode === 'login' ? 'register' : 'login'
+    error = null
+  }
+  
+  async function handleSubmit() {
+    error = null
+    
+    if (!email.trim() || !password) {
+      error = 'Email and password are required.'
+      return
+    }
+    
+    if (mode === 'register' && password !== passwordConfirm) {
+      error = 'Passwords do not match.'
+      return
+    }
+    
+    if (mode === 'register' && password.length < 8) {
+      error = 'Password must be at least 8 characters.'
+      return
+    }
+    
+    loading = true
+    
     try {
-      // Get CSRF token first
-      const csrfResponse = await fetch('/api/auth/csrf/', {
-        credentials: 'include'
-      })
+      // Get CSRF token
+      const csrfResponse = await fetch('/api/auth/csrf/', { credentials: 'include' })
       const csrfData = await csrfResponse.json()
       
-      const response = await fetch('/api/auth/logout/', {
+      const endpoint = mode === 'register' ? '/api/auth/register/' : '/api/auth/login/'
+      
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'X-CSRFToken': csrfData.csrf_token
         },
-        credentials: 'include'
+        credentials: 'include',
+        body: JSON.stringify({ email: email.trim(), password })
       })
       
-      if (response.ok) {
-        authStore.set({
-          isAuthenticated: false,
-          user: null,
-          loading: false
-        })
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Authentication failed.')
       }
-    } catch (error) {
-      console.error('Logout error:', error)
+      
+      authStore.set({
+        isAuthenticated: true,
+        user: data.user,
+        loading: false
+      })
+      
+      // After login, try to load server scenarios and merge with local
+      try {
+        const scenariosResponse = await fetch('/api/scenarios/', { credentials: 'include' })
+        if (scenariosResponse.ok) {
+          const serverScenarios = await scenariosResponse.json()
+          scenarioActions.mergeServerScenarios(serverScenarios)
+        }
+      } catch {
+        // Non-fatal - local scenarios still work
+      }
+      
+      close()
+    } catch (err) {
+      error = err.message
+    } finally {
+      loading = false
     }
   }
-  
-  // No form submission needed - only Google OAuth
 </script>
 
 {#if showAuth}
   <div class="auth-modal">
-    <div class="modal-overlay" on:click={() => showAuth = false} on:keydown={() => showAuth = false} role="presentation"></div>
+    <div class="modal-overlay" on:click={close} on:keydown={(e) => e.key === 'Escape' && close()} role="presentation"></div>
     <div class="modal-content">
       <div class="modal-header">
-        <h2>Sign In</h2>
-        <button class="close-btn" on:click={() => showAuth = false}>×</button>
+        <h2>{mode === 'register' ? 'Create Account' : 'Sign In'}</h2>
+        <button class="close-btn" on:click={close}>×</button>
       </div>
       
-      <!-- Google OAuth Button -->
-      <div class="oauth-section">
-        <button type="button" class="google-btn" on:click={googleLogin} disabled={loading}>
-          <svg width="18" height="18" viewBox="0 0 24 24">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-          </svg>
-          Continue with Google
-        </button>
+      <form class="auth-form" on:submit|preventDefault={handleSubmit}>
+        <div class="form-group">
+          <label for="auth-email">Email</label>
+          <input
+            id="auth-email"
+            type="email"
+            bind:value={email}
+            placeholder="you@example.com"
+            autocomplete="email"
+            disabled={loading}
+          />
+        </div>
+        
+        <div class="form-group">
+          <label for="auth-password">Password</label>
+          <input
+            id="auth-password"
+            type="password"
+            bind:value={password}
+            placeholder={mode === 'register' ? 'At least 8 characters' : 'Your password'}
+            autocomplete={mode === 'register' ? 'new-password' : 'current-password'}
+            disabled={loading}
+          />
+        </div>
+        
+        {#if mode === 'register'}
+          <div class="form-group">
+            <label for="auth-password-confirm">Confirm Password</label>
+            <input
+              id="auth-password-confirm"
+              type="password"
+              bind:value={passwordConfirm}
+              placeholder="Confirm your password"
+              autocomplete="new-password"
+              disabled={loading}
+            />
+          </div>
+        {/if}
         
         {#if error}
           <div class="error">{error}</div>
         {/if}
         
+        <button type="submit" class="submit-btn" disabled={loading}>
+          {#if loading}
+            {mode === 'register' ? 'Creating Account...' : 'Signing In...'}
+          {:else}
+            {mode === 'register' ? 'Create Account' : 'Sign In'}
+          {/if}
+        </button>
+      </form>
+      
+      <div class="auth-footer">
+        {#if mode === 'login'}
+          <p>Don't have an account? <button class="link-btn" on:click={switchMode}>Create one</button></p>
+        {:else}
+          <p>Already have an account? <button class="link-btn" on:click={switchMode}>Sign in</button></p>
+        {/if}
         <p class="auth-info">
-          Sign in with your Google account to access your retirement planning tools.
+          Create an account to sync your scenarios across devices.
+          You can use FIREsim without an account — your data saves locally.
         </p>
       </div>
     </div>
@@ -175,53 +231,103 @@
     color: #333;
   }
   
-  .oauth-section {
-    padding: 20px 20px 20px 20px;
+  .auth-form {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
   
-  .google-btn {
-    width: 100%;
-    padding: 12px;
-    background: white;
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  
+  .form-group label {
+    font-size: 14px;
+    font-weight: 600;
     color: #333;
+  }
+  
+  .form-group input {
+    padding: 10px 12px;
     border: 1px solid #ddd;
     border-radius: 6px;
     font-size: 16px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
+    transition: border-color 0.2s;
   }
   
-  .google-btn:hover:not(:disabled) {
-    background: #f8f9fa;
-    border-color: #ccc;
+  .form-group input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.15);
   }
   
-  .google-btn:disabled {
+  .form-group input:disabled {
     background: #f5f5f5;
-    color: #666;
+  }
+  
+  .submit-btn {
+    width: 100%;
+    padding: 12px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  
+  .submit-btn:hover:not(:disabled) {
+    background: #0056b3;
+  }
+  
+  .submit-btn:disabled {
+    background: #6c757d;
     cursor: not-allowed;
   }
   
   .error {
     background: #f8d7da;
     color: #721c24;
-    padding: 10px;
+    padding: 10px 12px;
     border-radius: 6px;
-    margin-top: 20px;
     font-size: 14px;
   }
   
-  .auth-info {
+  .auth-footer {
+    padding: 0 20px 20px;
     text-align: center;
+  }
+  
+  .auth-footer p {
     color: #666;
     font-size: 14px;
-    margin-top: 20px;
-    margin-bottom: 0;
+    margin: 8px 0;
+  }
+  
+  .link-btn {
+    background: none;
+    border: none;
+    color: #007bff;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 0;
+    text-decoration: underline;
+  }
+  
+  .link-btn:hover {
+    color: #0056b3;
+  }
+  
+  .auth-info {
+    color: #999 !important;
+    font-size: 13px !important;
+    line-height: 1.4;
+    margin-top: 12px !important;
   }
 </style>
-

@@ -294,9 +294,10 @@ def _create_projection_accounts(data):
 
 
 @api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([permissions.AllowAny])
 def run_projection(request):
-    """Run a retirement projection"""
+    """Run a retirement projection. Works for anonymous users.
+    Authenticated users can also save by passing save=true."""
     serializer = ProjectionRequestSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -342,16 +343,17 @@ def run_projection(request):
             'total_taxes_paid': float(results_df['taxes_paid'].sum()),
         }
         
-        # Track usage
-        log_usage(request.user, 'projection_run', {
-            'scenario_name': data.get('name', 'Unnamed'),
-        })
+        # Track usage for authenticated users
+        if request.user.is_authenticated:
+            log_usage(request.user, 'projection_run', {
+                'scenario_name': data.get('name', 'Unnamed'),
+            })
         
-        # Save scenario if requested
+        # Save scenario if requested (requires authentication)
         scenario_id = None
         should_save = request.data.get('save', False)
         
-        if should_save:
+        if should_save and request.user.is_authenticated:
             scenario_name = data.get('name', 'Unnamed Projection')
             scenario_data = {
                 'name': scenario_name,
@@ -443,9 +445,9 @@ def get_scenario_results(request, scenario_id):
 
 
 @api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([permissions.AllowAny])
 def run_monte_carlo(request):
-    """Run Monte Carlo simulation on retirement projection"""
+    """Run Monte Carlo simulation on retirement projection. Works for anonymous users."""
     if not request.data:
         return Response({'error': 'No data provided'}, status=status.HTTP_400_BAD_REQUEST)
     
@@ -491,9 +493,10 @@ def run_monte_carlo(request):
         simulator = MonteCarloSimulator(config)
         result = simulator.run_monte_carlo(projection_data)
         
-        log_usage(request.user, 'monte_carlo_run', {
-            'num_simulations': config.num_simulations,
-        })
+        if request.user.is_authenticated:
+            log_usage(request.user, 'monte_carlo_run', {
+                'num_simulations': config.num_simulations,
+            })
         
         response_data = {
             'summary_stats': result.summary_stats,
@@ -536,9 +539,9 @@ def delete_scenario(request, scenario_id):
 
 
 @api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([permissions.AllowAny])
 def export_to_excel(request):
-    """Export projection results to Excel format"""
+    """Export projection results to Excel format. Works for anonymous users."""
     try:
         projection_data = request.data.get('yearly_data', [])
         summary_stats = request.data.get('summary_stats', {})
@@ -549,10 +552,11 @@ def export_to_excel(request):
         
         excel_file = create_excel_export(projection_data, summary_stats, scenario_name)
         
-        log_usage(request.user, 'excel_export', {
-            'scenario_name': scenario_name,
-            'years_exported': len(projection_data)
-        })
+        if request.user.is_authenticated:
+            log_usage(request.user, 'excel_export', {
+                'scenario_name': scenario_name,
+                'years_exported': len(projection_data)
+            })
         
         response = HttpResponse(
             excel_file.getvalue(),

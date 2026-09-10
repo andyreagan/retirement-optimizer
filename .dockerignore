@@ -1,0 +1,13 @@
+.git/
+.venv/
+.env
+__pycache__/
+*.pyc
+*.sqlite3
+node_modules/
+.pytest_cache/
+.coverage
+*.egg-info/
+.DS_Store
+functional_tests/
+.pi/

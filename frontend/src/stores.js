@@ -4,5 +4,5 @@ import { writable } from 'svelte/store'
 export const authStore = writable({
   isAuthenticated: false,
   user: null,
-  loading: true
+  loading: false  // Start as false - no auth check needed to use the app
 })

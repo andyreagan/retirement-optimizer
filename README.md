@@ -1,3 +1,9 @@
+> **ARCHIVED (2026-09-10).** Superseded by the goals simulator in the private `finances` repo:
+> beancount ledger (ground truth) + goals.toml/accounts.toml DSL + a tested Monte Carlo
+> engine with historical sequence-risk returns, account-rule modeling, and mortality
+> weighting. This app's known defects (MC averages away sequence risk, couples taxed
+> as single, untested math) are documented in that repo's audit notes. Kept for reference.
+
 # Retirement Planning Optimizer
 
 A comprehensive retirement planning application with Monte Carlo simulation and multi-account tax-optimized projections.

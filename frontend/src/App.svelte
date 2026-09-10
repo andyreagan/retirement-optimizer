@@ -11,7 +11,6 @@
   import MonteCarloConfig from './components/MonteCarloConfig.svelte'
   import MonteCarloResults from './components/MonteCarloResults.svelte'
   import AuthManager from './components/AuthManager.svelte'
-  import LandingPage from './components/LandingPage.svelte'
   
   let monteCarloConfig = {
     num_simulations: 1000,
@@ -24,7 +23,8 @@
   }
   
   let showAuth = false
-  let authState = { isAuthenticated: false, user: null, loading: true }
+  let authMode = 'login' // 'login' or 'register'
+  let authState = { isAuthenticated: false, user: null, loading: false }
   let showProfile = false
   let scenario, ui
   
@@ -38,6 +38,9 @@
   })
   
   onMount(() => {
+    // Check if user has an existing session
+    checkAuthStatus()
+    
     function handleClickOutside(event) {
       if (showProfile && !event.target.closest('.profile-dropdown')) {
         showProfile = false
@@ -46,6 +49,18 @@
     document.addEventListener('click', handleClickOutside)
     return () => document.removeEventListener('click', handleClickOutside)
   })
+
+  async function checkAuthStatus() {
+    try {
+      const response = await fetch('/api/auth/user/', { credentials: 'include' })
+      if (response.ok) {
+        const user = await response.json()
+        authStore.set({ isAuthenticated: true, user, loading: false })
+      }
+    } catch {
+      // Not authenticated - that's fine, user can still use the app
+    }
+  }
 
   async function runMonteCarlo() {
     if (!scenario.results) {
@@ -109,86 +124,86 @@
     }
   }
 
-  function handleRefreshSavedScenarios() {}
+  function openAuth(mode = 'login') {
+    authMode = mode
+    showAuth = true
+  }
 </script>
 
 <main>
   <div class="header">
     <h1>FIREsim</h1>
     <div class="auth-controls">
-      {#if authState.loading}
-        <div class="auth-loading">Loading...</div>
-      {:else if authState.isAuthenticated}
+      {#if authState.isAuthenticated}
         <div class="user-info">
           <span>Welcome, {authState.user.display_name}!</span>
           <button class="logout-btn" on:click={handleLogout}>Logout</button>
         </div>
       {:else}
-        <button class="login-btn" on:click={() => showAuth = true}>
+        <button class="login-btn" on:click={() => openAuth('login')}>
           Sign In
+        </button>
+        <button class="register-btn" on:click={() => openAuth('register')}>
+          Create Account
         </button>
       {/if}
     </div>
   </div>
   
-  {#if authState.isAuthenticated}
-    <div class="app-container">
-      <ScenarioHeader 
-        on:scenarioSaved={handleRefreshSavedScenarios}
-        on:refreshSavedScenarios={handleRefreshSavedScenarios}
-      />
-      
-      <TabNavigation />
-      
-      <div class="content-area">
-        {#if ui.currentView === 'parameters'}
-          <ParametersTab />
-        {:else if ui.currentView === 'results'}
-          {#if scenario.results}
-            <Results data={scenario.results} />
-          {:else}
-            <div class="empty-state">
-              <h3>No Results Yet</h3>
-              <p>Run a projection from the Parameters tab to see results here.</p>
-              <button class="primary-btn" on:click={() => scenarioActions.setCurrentView('parameters')}>
-                Go to Parameters
-              </button>
-            </div>
-          {/if}
-        {:else if ui.currentView === 'monte-carlo'}
-          {#if scenario.results}
-            <div class="monte-carlo-content">
-              <MonteCarloConfig 
-                bind:config={monteCarloConfig} 
-                isRunning={ui.isLoading}
-                onRunMonteCarlo={runMonteCarlo}
-              />
-              {#if scenario.monteCarloResults}
-                <MonteCarloResults results={scenario.monteCarloResults} />
-              {/if}
-            </div>
-          {:else}
-            <div class="empty-state">
-              <h3>Monte Carlo Simulation</h3>
-              <p>Run a projection first to enable Monte Carlo simulation.</p>
-              <button class="primary-btn" on:click={() => scenarioActions.setCurrentView('parameters')}>
-                Go to Parameters
-              </button>
-            </div>
-          {/if}
-        {/if}
-      </div>
-    </div>
+  <div class="app-container">
+    <ScenarioHeader 
+      isAuthenticated={authState.isAuthenticated}
+      on:showAuth={() => openAuth('register')}
+    />
     
-    {#if ui.showScenarioManager}
-      <ScenarioManager />
-    {/if}
-  {:else if !authState.loading}
-    <LandingPage onShowAuth={() => showAuth = true} />
+    <TabNavigation />
+    
+    <div class="content-area">
+      {#if ui.currentView === 'parameters'}
+        <ParametersTab />
+      {:else if ui.currentView === 'results'}
+        {#if scenario.results}
+          <Results data={scenario.results} />
+        {:else}
+          <div class="empty-state">
+            <h3>No Results Yet</h3>
+            <p>Run a projection from the Parameters tab to see results here.</p>
+            <button class="primary-btn" on:click={() => scenarioActions.setCurrentView('parameters')}>
+              Go to Parameters
+            </button>
+          </div>
+        {/if}
+      {:else if ui.currentView === 'monte-carlo'}
+        {#if scenario.results}
+          <div class="monte-carlo-content">
+            <MonteCarloConfig 
+              bind:config={monteCarloConfig} 
+              isRunning={ui.isLoading}
+              onRunMonteCarlo={runMonteCarlo}
+            />
+            {#if scenario.monteCarloResults}
+              <MonteCarloResults results={scenario.monteCarloResults} />
+            {/if}
+          </div>
+        {:else}
+          <div class="empty-state">
+            <h3>Monte Carlo Simulation</h3>
+            <p>Run a projection first to enable Monte Carlo simulation.</p>
+            <button class="primary-btn" on:click={() => scenarioActions.setCurrentView('parameters')}>
+              Go to Parameters
+            </button>
+          </div>
+        {/if}
+      {/if}
+    </div>
+  </div>
+  
+  {#if ui.showScenarioManager}
+    <ScenarioManager isAuthenticated={authState.isAuthenticated} />
   {/if}
 </main>
 
-<AuthManager bind:showAuth={showAuth} />
+<AuthManager bind:showAuth={showAuth} bind:mode={authMode} />
 
 <style>
   main {
@@ -218,11 +233,6 @@
     gap: 10px;
   }
   
-  .auth-loading {
-    color: #666;
-    font-size: 14px;
-  }
-  
   .user-info {
     display: flex;
     align-items: center;
@@ -234,7 +244,7 @@
     font-weight: 500;
   }
   
-  .login-btn, .logout-btn {
+  .login-btn, .register-btn, .logout-btn {
     padding: 8px 16px;
     border: 1px solid #007bff;
     background: #007bff;
@@ -245,9 +255,18 @@
     transition: all 0.3s ease;
   }
   
-  .login-btn:hover, .logout-btn:hover {
+  .login-btn:hover, .register-btn:hover {
     background: #0056b3;
     border-color: #0056b3;
+  }
+  
+  .register-btn {
+    background: white;
+    color: #007bff;
+  }
+  
+  .register-btn:hover {
+    background: #f0f7ff;
   }
   
   .logout-btn {
